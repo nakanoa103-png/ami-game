@@ -421,11 +421,52 @@ h1 {
 }
 
 /* Custom Setup Section */
+.custom-setup-wrapper {
+    margin-top: 20px;
+    border-top: 1px solid var(--glass-border);
+    padding-top: 20px;
+}
+
+.btn-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    color: var(--text-muted);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-toggle:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-main);
+}
+
+.btn-toggle .icon {
+    transition: transform 0.3s ease;
+}
+
+.btn-toggle.active .icon {
+    transform: rotate(180deg);
+}
+
 .custom-setup {
     background: rgba(0, 0, 0, 0.2);
     padding: 20px;
     border-radius: 12px;
-    margin-bottom: 20px;
+    margin-top: 15px;
+    transition: all 0.3s ease;
+}
+
+.hidden-content {
+    display: none;
 }
 
 .custom-setup h3 {

@@ -33,18 +33,28 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedJugIndex = null;
         hideMessage();
 
-        // 1. Generate Classic "Divide into Two" puzzle (A = B + C, Target = A / 2)
-        let c = Math.floor(Math.random() * 4) + 2; // 2 to 5
-        let b = c + Math.floor(Math.random() * 4) + 2; // c+2 to c+5
-        if ((b + c) % 2 !== 0) { b++; } // Ensure A is even
-        let a = b + c;
+        let caps, vols, target, path;
 
-        capacities = [a, b, c];
-        currentVols = [a, 0, 0]; // Start with largest full
-        targetVol = a / 2;
+        // 解が存在する問題が生成されるまでリトライ（元の a = b + c 形式を使用）
+        let attempts = 0;
+        do {
+            let c = Math.floor(Math.random() * 4) + 2; // 2〜5
+            let b = c + Math.floor(Math.random() * 4) + 2; // c+2〜c+5
+            if ((b + c) % 2 !== 0) { b++; } // targetを整数にするためa(=b+c)を偶数に
+            const a = b + c;
 
-        // Ensure we find the shortest path based on the new winning condition
-        shortestPath = solveBFS(capacities, currentVols, targetVol);
+            caps = [a, b, c];
+            vols = [a, 0, 0];
+            target = a / 2;
+
+            path = solveBFS(caps, vols, target);
+            attempts++;
+        } while (path === null && attempts < 100);
+
+        capacities = caps;
+        currentVols = vols;
+        targetVol = target;
+        shortestPath = path;
 
         // Initialize tracking
         madeVolumes = new Set();
@@ -409,6 +419,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
         renderUI();
     }
+
+    // Toggle Custom Setup
+    const btnToggleCustom = document.getElementById('btn-toggle-custom');
+    const customSetupContent = document.getElementById('custom-setup-content');
+    const toggleText = document.getElementById('toggle-text');
+
+    btnToggleCustom.addEventListener('click', () => {
+        const isHidden = customSetupContent.classList.contains('hidden-content');
+        if (isHidden) {
+            customSetupContent.classList.remove('hidden-content');
+            btnToggleCustom.classList.add('active');
+            toggleText.textContent = 'カスタム設定を閉じる';
+        } else {
+            customSetupContent.classList.add('hidden-content');
+            btnToggleCustom.classList.remove('active');
+            toggleText.textContent = 'カスタム設定を表示';
+        }
+    });
 
     // New Game Button
     btnNewGame.addEventListener('click', initGame);
