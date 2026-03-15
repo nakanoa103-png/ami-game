@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>もぐら叩きゲーム</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <header>
+            <h1>もぐら叩き 🐹<svg class="title-hammer" width="30" height="30" viewBox="0 0 100 100"><g transform="rotate(-20 50 50)"><rect x="40" y="45" width="20" height="45" fill="#FFD54F" rx="5" ry="5"/><rect x="10" y="15" width="80" height="40" fill="#FF5252" rx="10" ry="10"/><circle cx="10" cy="35" r="15" fill="#FFE082"/><circle cx="90" cy="35" r="15" fill="#FFE082"/></g></svg></h1>
+            <div class="stats">
+                <div class="stat-box">
+                    <span>スコア:</span>
+                    <span id="score">0</span>
+                <div class="stat-box">
+                    <span>ハイスコア:</span>
+                    <span id="highscore">0</span>
+                </div>
+                <div class="stat-box">
+                    <span>残り時間:</span>
+                    <span id="time">30</span>
+                </div>
+            </div>
+            <button id="start-btn">ゲームスタート</button>
+        </header>
+
+        <main>
+            <div id="combo-display"></div>
+            <div class="grid">
+                <!-- 9つの穴 -->
+                <div class="hole" data-index="0"><div class="mole">🐹</div></div>
+                <div class="hole" data-index="1"><div class="mole">🐹</div></div>
+                <div class="hole" data-index="2"><div class="mole">🐹</div></div>
+                <div class="hole" data-index="3"><div class="mole">🐹</div></div>
+                <div class="hole" data-index="4"><div class="mole">🐹</div></div>
+                <div class="hole" data-index="5"><div class="mole">🐹</div></div>
+                <div class="hole" data-index="6"><div class="mole">🐹</div></div>
+                <div class="hole" data-index="7"><div class="mole">🐹</div></div>
+                <div class="hole" data-index="8"><div class="mole">🐹</div></div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

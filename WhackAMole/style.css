@@ -1,0 +1,191 @@
+:root {
+    --bg-color: #fce4ec; /* Light pink/warm background */
+    --primary-color: #d81b60; /* Deep pink/red for accents */
+    --text-color: #3e2723; /* Dark brown for text */
+    --hole-bg: #8d6e63; /* Brown for holes */
+    --hole-inner: #3e2723; /* Dark inner hole */
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none; /* Prevent text selection while clicking fast */
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden; /* Keep the screen fixed */
+}
+
+.game-container {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    padding: 30px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    max-width: 500px;
+    width: 100%;
+}
+
+header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 20px;
+    color: var(--primary-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.title-hammer {
+    filter: drop-shadow(0 3px 5px rgba(0,0,0,0.1));
+    animation: hammer-bounce 2s infinite ease-in-out;
+}
+
+@keyframes hammer-bounce {
+    0%, 100% { transform: rotate(-10deg); }
+    50% { transform: rotate(10deg); }
+}
+
+.stats {
+    display: flex;
+    justify-content: space-around;
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-bottom: 20px;
+}
+
+.stat-box {
+    background: #fff;
+    padding: 10px 15px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+}
+
+#combo-display {
+    position: absolute;
+    top: 45%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    font-size: 3rem;
+    font-weight: 900;
+    color: #FFC107;
+    text-shadow: 2px 2px 0 #d81b60, -2px -2px 0 #d81b60, 2px -2px 0 #d81b60, -2px 2px 0 #d81b60, 0 4px 10px rgba(0,0,0,0.5);
+    pointer-events: none;
+    z-index: 20;
+    opacity: 0;
+    transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.1s;
+}
+
+#combo-display.show {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+}
+
+#start-btn {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 15px 30px;
+    font-size: 1.2rem;
+    font-weight: bold;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    margin-bottom: 30px;
+}
+
+#start-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(216, 27, 96, 0.3);
+}
+
+#start-btn:active {
+    transform: translateY(0);
+}
+
+/* Grid layout for holes */
+.grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    width: 100%;
+    max-width: 400px;
+    margin: 0 auto;
+    /* Custom cursor for hammering effect (piko piko hammer) */
+    /* Custom cursor for hammering effect (piko piko hammer) - Toy-like design */
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 100 100"><g transform="rotate(-20 50 50)"><rect x="40" y="45" width="20" height="45" fill="%23FFD54F" rx="10" ry="10"/><rect x="10" y="15" width="80" height="40" fill="%23FF5252" rx="20" ry="20"/><circle cx="10" cy="35" r="15" fill="%23FFE082"/><circle cx="90" cy="35" r="15" fill="%23FFE082"/><rect x="20" y="15" width="60" height="40" fill="none" stroke="%23B71C1C" stroke-width="2" rx="20" ry="20" stroke-dasharray="4 4"/></g></svg>') 30 30, pointer;
+}
+
+/* Hammer animation class added dynamically when clicking inside the grid */
+body.hammer-down .grid {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 100 100"><g transform="rotate(-60 30 70)"><rect x="40" y="45" width="20" height="45" fill="%23FFD54F" rx="10" ry="10"/><rect x="10" y="15" width="80" height="40" fill="%23FF5252" rx="20" ry="20"/><circle cx="10" cy="35" r="15" fill="%23FFE082"/><circle cx="90" cy="35" r="15" fill="%23FFE082"/><rect x="20" y="15" width="60" height="40" fill="none" stroke="%23B71C1C" stroke-width="2" rx="20" ry="20" stroke-dasharray="4 4"/></g><path d="M 5 20 L 25 10 M 10 30 L 30 20 M 20 45 L 35 30" stroke="%23FFEB3B" stroke-width="4" stroke-linecap="round"/></svg>') 15 50, pointer;
+}
+
+.hole {
+    background-color: var(--hole-bg);
+    border-radius: 50%;
+    position: relative;
+    overflow: hidden;
+    aspect-ratio: 1 / 1;
+    box-shadow: inset 0 10px 15px var(--hole-inner), 0 5px 10px rgba(0,0,0,0.2);
+    display: flex;
+    justify-content: center;
+}
+
+/* Visual hammer strike specifically for keyboard */
+.hole::after {
+    content: '';
+    position: absolute;
+    top: 5%;
+    left: 10%;
+    width: 80%;
+    height: 80%;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 100 100"><g transform="rotate(-60 30 70)"><rect x="40" y="45" width="20" height="45" fill="%23FFD54F" rx="10" ry="10"/><rect x="10" y="15" width="80" height="40" fill="%23FF5252" rx="20" ry="20"/><circle cx="10" cy="35" r="15" fill="%23FFE082"/><circle cx="90" cy="35" r="15" fill="%23FFE082"/><rect x="20" y="15" width="60" height="40" fill="none" stroke="%23B71C1C" stroke-width="2" rx="20" ry="20" stroke-dasharray="4 4"/></g></svg>');
+    background-size: contain;
+    background-repeat: no-repeat;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 10;
+    transform: rotate(20deg) scale(1.5);
+    transition: opacity 0.1s, transform 0.1s;
+}
+
+.hole.hammer-strike::after {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+    transition: none;
+}
+
+.mole {
+    font-size: 4rem; /* Size of the emoji */
+    transition: transform 0.1s;
+    transform: translateY(100%); /* Hidden by default */
+    pointer-events: none; /* Let clicks pass through to the hole, we'll manage clicks on hole */
+    filter: drop-shadow(0 5px 5px rgba(0,0,0,0.5));
+}
+
+/* When the mole is active/up */
+.hole.up .mole {
+    transform: translateY(10%);
+}
+
+.hole.hit .mole {
+    transform: translateY(10%) scale(0.8) rotate(15deg);
+    opacity: 0; /* Visual feedback for being hit before hiding */
+    transition: transform 0.4s ease-out, opacity 0.4s ease-out;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .mole { font-size: 3rem; }
+    header h1 { font-size: 2rem; }
+}

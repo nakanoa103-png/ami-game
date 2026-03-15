@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>油分けパズル - Water Jug Game</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="background-animation"></div>
+    <div class="container">
+        <header>
+            <h1>油分けパズル</h1>
+            <p class="subtitle">Oil Pouring Game</p>
+        </header>
+
+        <main class="game-board glass-panel">
+            <div class="target-display">
+                <span class="target-label">目標量 (Target):</span>
+                <span id="target-value" class="target-value">-- 升</span>
+                <span id="target-status" class="target-status"></span>
+            </div>
+
+            <div class="jugs-container" id="jugs-container">
+                <!-- Jugs will be dynamically inserted here -->
+            </div>
+
+            <div class="controls">
+                <button id="btn-hint" class="btn btn-secondary" title="考え方のヒントを表示">ヒント</button>
+                <button id="btn-next-move" class="btn btn-warning" title="ズバリ次の一手を教える">次の一手を聞く</button>
+                <button id="btn-new-game" class="btn btn-primary" title="新しくランダムな問題を生成">新しいゲーム</button>
+            </div>
+
+            <div class="custom-setup">
+                <h3>カスタム問題の設定</h3>
+                <div class="input-group">
+                    <label>マス1: <input type="number" id="input-cap1" value="10" min="1"></label>
+                    <label>マス2: <input type="number" id="input-cap2" value="7" min="1"></label>
+                    <label>マス3: <input type="number" id="input-cap3" value="3" min="1"></label>
+                </div>
+                <div class="input-group">
+                    <label>目標量: <input type="number" id="input-target" value="5" min="1"></label>
+                    <button id="btn-custom-game" class="btn btn-primary btn-small"
+                        title="指定した設定でゲームを開始">この設定で遊ぶ</button>
+                </div>
+            </div>
+
+            <div id="game-message" class="message-box hidden">
+                <!-- Messages will be shown here -->
+            </div>
+
+            <div class="rules-section">
+                <h3>ルール - Rules</h3>
+                <ul>
+                    <li>3つのマスの間で油を移し替えて、指定された<strong>「目標量」</strong>を作り出してください。</li>
+                    <li>目標となる量の油をマスの中に作り出した後、残りの油を別のマスにまとめて、指定の形（目標量同士等）に分けることができればゲームクリアです。</li>
+                    <li>油は<strong>「移動元」</strong>から<strong>「移動先」</strong>へ、マスが空になるか、移動先が満杯になるまで注がれます。</li>
+                    <li>マスを直接クリックして操作します。1回目で移動元を選択し、2回目で移動先を選択します。</li>
+                </ul>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
