@@ -188,7 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
             targetStatusEl.textContent = '🎉 完成！';
             targetStatusEl.classList.add('show', 'win');
         } else if (mode === 'target' || mode === 'chance') {
-            targetStatusEl.textContent = '🌟 チャンス (あと1手)';
+            targetStatusEl.textContent = `🌟 チャンス (あと${shortestPath.length - 1}手)`;
             targetStatusEl.classList.add('show', 'chance');
         } else {
             targetStatusEl.classList.remove('show');
