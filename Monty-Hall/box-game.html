@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🎰 箱ゲーム</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #312e81, #581c87, #831843);
+      display: flex; align-items: center; justify-content: center; padding: 16px;
+    }
+    .card {
+      background: #fff; border-radius: 24px; box-shadow: 0 25px 50px rgba(0,0,0,0.4);
+      padding: 24px; width: 100%; max-width: 380px; text-align: center;
+    }
+    h1 { font-size: 22px; font-weight: 800; color: #1f2937; margin-bottom: 4px; }
+    .subtitle { font-size: 11px; color: #9ca3af; margin-bottom: 10px; }
+
+    /* Multiplier row */
+    .mult-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px; }
+    .mult-edit-btn { font-size: 11px; font-weight: 700; border-radius: 8px; padding: 4px 9px; cursor: pointer; border: 1.5px solid; transition: background .15s; }
+    .mult-edit-btn.stay { color: #6366f1; border-color: #c7d2fe; background: #eef2ff; }
+    .mult-edit-btn.stay:hover { background: #e0e7ff; }
+    .mult-edit-btn.sw { color: #d97706; border-color: #fcd34d; background: #fffbeb; }
+    .mult-edit-btn.sw:hover { background: #fef3c7; }
+    .mult-input-wrap { font-size: 11px; color: #6b7280; font-weight: 600; }
+    .mult-input { width: 52px; border: 1.5px solid #c7d2fe; border-radius: 7px; padding: 3px 6px; font-size: 12px; text-align: center; }
+    .save-btn { font-size: 11px; background: #6366f1; color: #fff; border: none; border-radius: 7px; padding: 4px 8px; cursor: pointer; }
+
+    /* Points */
+    .points-box { background: #eef2ff; border-radius: 16px; padding: 10px 24px; display: inline-block; margin-bottom: 14px; }
+    .points-num { font-size: 30px; font-weight: 800; color: #6366f1; }
+    .points-unit { font-size: 14px; color: #a5b4fc; font-weight: 600; margin-left: 4px; }
+
+    /* Bet controls */
+    .section-title { font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 12px; }
+    .bet-row { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 8px; }
+    .bet-spin { width: 40px; height: 40px; border-radius: 50%; background: #e5e7eb; border: none; font-size: 20px; font-weight: 700; cursor: pointer; transition: background .15s; }
+    .bet-spin:hover { background: #d1d5db; }
+    .bet-num { font-size: 28px; font-weight: 800; color: #1f2937; width: 60px; }
+    .bet-info { font-size: 11px; color: #9ca3af; margin-bottom: 10px; line-height: 1.6; }
+    .bet-info .gain-stay { color: #6366f1; font-weight: 700; }
+    .bet-info .gain-sw { color: #f59e0b; font-weight: 700; }
+    .quick-bets { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-bottom: 14px; }
+    .quick-bet { padding: 4px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; border: none; cursor: pointer; transition: background .15s; background: #f3f4f6; color: #4b5563; }
+    .quick-bet:hover { background: #e5e7eb; }
+    .quick-bet.active { background: #6366f1; color: #fff; }
+    .quick-bet.allin { background: #fef2f2; color: #ef4444; }
+    .quick-bet.allin.active { background: #ef4444; color: #fff; }
+
+    /* Buttons */
+    .btn-main { width: 100%; padding: 12px; border-radius: 14px; border: none; font-size: 16px; font-weight: 800; cursor: pointer; transition: background .15s; background: #6366f1; color: #fff; }
+    .btn-main:hover { background: #4f46e5; }
+    .btn-stay { flex: 1; padding: 10px; border-radius: 12px; border: none; background: #eef2ff; color: #6366f1; font-weight: 800; font-size: 13px; cursor: pointer; border: 2px solid #c7d2fe; }
+    .btn-stay:hover { background: #e0e7ff; }
+    .btn-switch { flex: 1; padding: 10px; border-radius: 12px; border: none; background: #fffbeb; color: #d97706; font-weight: 800; font-size: 13px; cursor: pointer; border: 2px solid #fcd34d; }
+    .btn-switch:hover { background: #fef3c7; }
+    .switch-row { display: flex; gap: 10px; margin-top: 6px; }
+    .switch-hint { font-size: 10px; color: #9ca3af; margin-top: 4px; display: flex; justify-content: space-between; padding: 0 2px; }
+
+    /* Boxes */
+    .bet-label { font-size: 12px; color: #9ca3af; margin-bottom: 8px; }
+    .bet-label span { color: #6366f1; font-weight: 700; }
+    .boxes-row { display: flex; justify-content: center; gap: 12px; margin: 12px 0; }
+    .box-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .box { width: 80px; height: 80px; border-radius: 18px; border: 4px solid #bfdbfe; background: #eff6ff; font-size: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform .15s, border-color .15s, background .15s, opacity .2s; user-select: none; }
+    .box:hover { transform: scale(1.07); border-color: #3b82f6; }
+    .box.selected { border-color: #fbbf24; background: #fffbeb; }
+    .box.revealed { border-color: #e5e7eb; background: #f9fafb; opacity: 0.4; cursor: default; }
+    .box.revealed:hover { transform: none; }
+    .box.win { border-color: #4ade80; background: #f0fdf4; }
+    .box.lose { border-color: #f87171; background: #fef2f2; }
+    .box.answer { border-color: #fbbf24; background: #fffbeb; }
+    .box.disabled { cursor: default; } .box.disabled:hover { transform: none; }
+    .box-lbl { font-size: 11px; color: #9ca3af; font-weight: 600; }
+
+    /* Message */
+    .message { font-size: 14px; font-weight: 700; padding: 0 8px; margin: 6px 0; }
+    .message.win { color: #22c55e; } .message.lose { color: #ef4444; } .message.info { color: #6366f1; }
+
+    /* Stats */
+    .stats-section { margin-top: 16px; border-top: 1px solid #f3f4f6; padding-top: 14px; }
+    .stats-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .stats-title { font-size: 11px; font-weight: 700; color: #6b7280; }
+    .reset-link { font-size: 10px; color: #d1d5db; background: none; border: none; cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+    .reset-link:hover { color: #9ca3af; background: #f3f4f6; }
+    .stat-bar-wrap { margin-bottom: 10px; text-align: left; }
+    .stat-bar-top { display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .stat-bar-label { font-size: 11px; font-weight: 600; color: #4b5563; }
+    .stat-bar-val { font-size: 11px; color: #9ca3af; }
+    .rate-switch { color: #6366f1; font-weight: 700; }
+    .rate-stay { color: #6b7280; font-weight: 700; }
+    .bar-track { position: relative; height: 10px; background: #f3f4f6; border-radius: 99px; overflow: hidden; }
+    .bar-theory { position: absolute; top: 0; bottom: 0; width: 2px; background: #9ca3af; z-index: 2; }
+    .bar-fill { height: 100%; border-radius: 99px; transition: width .5s; }
+    .bar-fill.switch { background: #818cf8; }
+    .bar-fill.stay { background: #9ca3af; }
+    .bar-theory-label { font-size: 10px; color: #d1d5db; text-align: right; margin-top: 2px; }
+    .stats-comment { font-size: 11px; color: #9ca3af; font-style: italic; margin-top: 6px; min-height: 16px; }
+    .stats-comment.alert { color: #f59e0b; font-style: normal; font-weight: 600; }
+
+    /* Impatience */
+    .impatience-section { margin-top: 14px; border-top: 1px solid #f3f4f6; padding-top: 12px; text-align: center; }
+    .impatience-title { font-size: 11px; font-weight: 700; color: #6b7280; margin-bottom: 6px; }
+    .impatience-score { font-size: 28px; font-weight: 900; color: #6366f1; }
+    .impatience-label { font-size: 13px; font-weight: 700; margin: 2px 0 4px; color: #374151; }
+    .impatience-detail { font-size: 10px; color: #9ca3af; }
+
+    /* History */
+    .history-section { margin-top: 14px; border-top: 1px solid #f3f4f6; padding-top: 12px; }
+    .history-title { font-size: 11px; color: #9ca3af; font-weight: 600; margin-bottom: 6px; }
+    .history-row { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #6b7280; margin-bottom: 3px; }
+    .history-left { display: flex; gap: 4px; align-items: center; }
+    .history-switch { color: #818cf8; } .history-stay { color: #9ca3af; } .history-star { color: #f59e0b; }
+    .history-gain.win { color: #22c55e; font-weight: 600; } .history-gain.lose { color: #f87171; }
+
+    /* Gameover */
+    .gameover { padding: 8px 0; }
+    .gameover-title { font-size: 22px; font-weight: 800; color: #ef4444; margin-bottom: 8px; }
+    .gameover-sub { font-size: 13px; color: #9ca3af; margin-bottom: 14px; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>🎰 箱ゲーム</h1>
+  <p class="subtitle">モンティ・ホール方式</p>
+
+  <!-- Multiplier (editable) -->
+  <div class="mult-row" id="mult-display-row">
+    <button class="mult-edit-btn stay" onclick="openMultEdit('stay')">そのまま当たり <span id="stay-mult-label">3</span>倍 ✏️</button>
+    <button class="mult-edit-btn sw" onclick="openMultEdit('sw')">変更して当たり <span id="sw-mult-label">2.5</span>倍 ✏️</button>
+  </div>
+  <div class="mult-row" id="mult-edit-row" style="display:none">
+    <span class="mult-input-wrap" id="mult-editing-label"></span>
+    <input class="mult-input" id="mult-edit-input" type="number" step="0.1" min="1.1">
+    <button class="save-btn" id="mult-save-btn" onclick="saveMult()">保存</button>
+  </div>
+
+  <!-- Points -->
+  <div class="points-box">
+    <span class="points-num" id="points-num">10</span><span class="points-unit">pt</span>
+  </div>
+
+  <!-- Main area -->
+  <div id="main-area"></div>
+
+  <!-- Stats -->
+  <div class="stats-section">
+    <div class="stats-header">
+      <span class="stats-title">📊 勝率統計（<span id="total-games">0</span>回）</span>
+      <button class="reset-link" id="reset-link" style="display:none" onclick="resetStats()">統計クリア</button>
+    </div>
+    <div class="stat-bar-wrap">
+      <div class="stat-bar-top">
+        <span class="stat-bar-label">🔄 変更した場合</span>
+        <span class="stat-bar-val"><span id="sw-wins">0</span>/<span id="sw-total">0</span>回 <span class="rate-switch" id="sw-rate">0%</span></span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-theory" style="left:67%"></div>
+        <div class="bar-fill switch" id="sw-bar" style="width:0%"></div>
+      </div>
+      <div class="bar-theory-label">理論値 67%</div>
+    </div>
+    <div class="stat-bar-wrap">
+      <div class="stat-bar-top">
+        <span class="stat-bar-label">👆 そのままの場合</span>
+        <span class="stat-bar-val"><span id="st-wins">0</span>/<span id="st-total">0</span>回 <span class="rate-stay" id="st-rate">0%</span></span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-theory" style="left:33%"></div>
+        <div class="bar-fill stay" id="st-bar" style="width:0%"></div>
+      </div>
+      <div class="bar-theory-label">理論値 33%</div>
+    </div>
+    <p class="stats-comment" id="stats-comment"></p>
+  </div>
+
+  <!-- Impatience -->
+  <div class="impatience-section" id="impatience-section" style="display:none">
+    <p class="impatience-title">🧘 せっかち度判定</p>
+    <div class="impatience-score" id="imp-score">-</div>
+    <div class="impatience-label" id="imp-label">-</div>
+    <div class="impatience-detail" id="imp-detail"></div>
+  </div>
+
+  <!-- History -->
+  <div class="history-section" id="history-section" style="display:none">
+    <p class="history-title">直近の履歴</p>
+    <div id="history-list"></div>
+  </div>
+</div>
+
+<script>
+const LABELS = ["左", "中", "右"];
+let state = {
+  stayMult: 3,
+  swMult: 2.5,
+  points: 10,
+  bet: 1,
+  selected: null, answer: null, revealed: null, final: null,
+  phase: "bet",
+  history: [],
+  // 統計（クリアされるまで保持）
+  stats: { sw: {total:0, wins:0}, st: {total:0, wins:0} },
+  // せっかち度用（統計クリアと連動）
+  totalGames: 0,      // 賭け完了回数
+  startCount: 0,      // ゲーム開始回数（10ptスタート）
+  allInLosses: 0,     // 全賭けハズレ回数
+  currentRunGames: 0, // 現在の1ゲーム中の試行回数
+};
+
+// --- Game logic ---
+function startPick() {
+  if (state.bet < 1 || state.bet > state.points) return;
+  state.selected = null; state.answer = null; state.revealed = null; state.final = null;
+  state.phase = "pick";
+  render();
+}
+
+function pickBox(index) {
+  if (state.phase !== "pick") return;
+  const winning = Math.floor(Math.random() * 3);
+  state.selected = index;
+  state.answer = winning;
+  const losers = [0,1,2].filter(i => i !== index && i !== winning);
+  state.revealed = losers[Math.floor(Math.random() * losers.length)];
+  state.phase = "switch";
+  render();
+}
+
+function decide(switchBox) {
+  if (state.phase !== "switch") return;
+  let finalPick = state.selected;
+  if (switchBox) finalPick = [0,1,2].find(i => i !== state.selected && i !== state.revealed);
+  state.final = finalPick;
+
+  const won = finalPick === state.answer;
+  const mult = switchBox ? state.swMult : state.stayMult;
+  const gain = won ? Math.round(state.bet * mult) - state.bet : -state.bet;
+
+  // 全賭けハズレ判定
+  const wasAllIn = state.bet === state.points + gain - gain; // 賭け前のpoints == bet
+  // 正確に：賭ける前のポイント = 現ポイント - gain
+  const prevPoints = state.points;
+  state.points = Math.max(0, state.points + gain);
+
+  if (!won && state.bet === prevPoints) {
+    state.allInLosses++;
+  }
+
+  state.phase = "result";
+  state.totalGames++;
+  state.currentRunGames++;
+
+  state.history.unshift({ won, bet: state.bet, gain, points: state.points,
+    picked: state.selected, switched: switchBox, finalPick, answer: state.answer });
+  if (state.history.length > 5) state.history.pop();
+
+  // 統計（両方カウント）
+  const switchWon = finalPick === state.answer;
+  const stayWon = state.selected === state.answer;
+  state.stats.sw.total++; state.stats.sw.wins += switchWon ? 1 : 0;
+  state.stats.st.total++; state.stats.st.wins += stayWon ? 1 : 0;
+
+  render();
+}
+
+function reset() {
+  state.phase = "bet";
+  state.selected = null; state.answer = null; state.revealed = null; state.final = null;
+  render();
+}
+
+function restart() {
+  // ポイントのみリセット、統計・せっかち度は引き継ぐ
+  state.startCount++;
+  state.currentRunGames = 0;
+  state.points = 10; state.bet = 1; state.phase = "bet";
+  state.selected = null; state.answer = null; state.revealed = null; state.final = null;
+  state.history = [];
+  render();
+}
+
+function resetStats() {
+  if (!confirm("統計データとせっかち度をクリアしますか？")) return;
+  state.stats = { sw:{total:0,wins:0}, st:{total:0,wins:0} };
+  state.totalGames = 0;
+  state.startCount = 0;
+  state.allInLosses = 0;
+  state.currentRunGames = 0;
+  render();
+}
+
+function setBet(v) { state.bet = Math.max(1, Math.min(state.points, v)); render(); }
+
+// --- せっかち度計算 ---
+function calcImpatience() {
+  const starts = state.startCount + 1; // 現在プレイ中も1回
+  const games = state.totalGames;
+  if (games === 0) return null;
+
+  const avg = games / starts; // 1ゲームあたりの平均試行回数
+
+  let score;
+  if (avg <= 10) score = -5;
+  else if (avg <= 20) score = -4;
+  else if (avg <= 30) score = -3;
+  else if (avg <= 40) score = -2;
+  else if (avg <= 50) score = -1;
+  else if (avg <= 60) score = 0;
+  else if (avg <= 70) score = 1;
+  else if (avg <= 80) score = 2;
+  else if (avg <= 90) score = 3;
+  else if (avg <= 100) score = 4;
+  else score = 5;
+
+  // 全賭けハズレペナルティ
+  score -= state.allInLosses * 10;
+
+  const label = (() => {
+    if (score < 0) return `借金取りに追われてますか？💨`;
+    if (score === 0) return `鬼せっかち 😤`;
+    if (score <= 4) return `かなりせっかち 😅`;
+    if (score === 5) return `せっかち 😬`;
+    if (score === 6) return `ちょいせっかち 🙂`;
+    if (score === 7) return `普通 😌`;
+    if (score === 8) return `落ち着いてる 🍵`;
+    if (score === 9) return `超落ち着いてる 🌿`;
+    if (score === 10) return `菩薩の落ち着き 🪷`;
+    return `仏の落ち着き ✨`;
+  })();
+
+  return { score, label, avg: avg.toFixed(1), starts, games };
+}
+
+// --- 統計コメント ---
+function statsComment() {
+  const total = state.stats.sw.total;
+  if (total < 5) return { text: "回数を重ねると傾向が見えてきます…", alert: false };
+
+  const sr = state.stats.sw.wins / total;
+  const tr = state.stats.st.wins / total;
+
+  // 追加２：そのままが理論値より大幅に低い時の警告
+  if (total >= 15 && tr < 0.20) {
+    return { text: "⚠️ そろそろそのままが多く出るかも？確率は均衡に向かいます", alert: true };
+  }
+
+  if (sr > tr + 0.1) return { text: "📊 変更した方が勝ちやすい傾向が出てきました！", alert: false };
+  if (tr > sr + 0.1) return { text: "📊 まだそのままの方が多い…もう少し続けてみて！", alert: false };
+  return { text: "📊 今のところ接戦です。もう少し続けてみましょう！", alert: false };
+}
+
+// --- Render ---
+function boxClass(i) {
+  const ph = state.phase;
+  if (ph === "result") {
+    if (i === state.final && i === state.answer) return "box win";
+    if (i === state.final && i !== state.answer) return "box lose";
+    if (i === state.answer) return "box answer";
+    return "box disabled";
+  }
+  if (ph === "switch") {
+    if (i === state.revealed) return "box revealed";
+    if (i === state.selected) return "box selected";
+    return "box disabled";
+  }
+  if (ph === "pick") return "box";
+  return "box disabled";
+}
+
+function boxEmoji(i) {
+  if (state.phase === "result") return i === state.answer ? "⭐" : "❌";
+  if (state.phase === "switch") {
+    if (i === state.revealed) return "💨";
+    if (i === state.selected) return "👆";
+    return "📦";
+  }
+  return "📦";
+}
+
+function render() {
+  document.getElementById("points-num").textContent = state.points;
+
+  // Stats
+  const total = state.stats.sw.total;
+  document.getElementById("total-games").textContent = total;
+  document.getElementById("reset-link").style.display = total > 0 ? "" : "none";
+  const swRate = total === 0 ? 0 : Math.round(state.stats.sw.wins / total * 100);
+  const stRate = total === 0 ? 0 : Math.round(state.stats.st.wins / total * 100);
+  document.getElementById("sw-wins").textContent = state.stats.sw.wins;
+  document.getElementById("sw-total").textContent = total;
+  document.getElementById("sw-rate").textContent = swRate + "%";
+  document.getElementById("sw-bar").style.width = swRate + "%";
+  document.getElementById("st-wins").textContent = state.stats.st.wins;
+  document.getElementById("st-total").textContent = total;
+  document.getElementById("st-rate").textContent = stRate + "%";
+  document.getElementById("st-bar").style.width = stRate + "%";
+  const comment = statsComment();
+  const el = document.getElementById("stats-comment");
+  el.textContent = total > 0 ? comment.text : "";
+  el.className = "stats-comment" + (comment.alert ? " alert" : "");
+
+  // Impatience
+  const imp = calcImpatience();
+  const impSec = document.getElementById("impatience-section");
+  if (imp) {
+    impSec.style.display = "";
+    document.getElementById("imp-score").textContent = imp.score >= 0 ? "+" + imp.score : imp.score;
+    document.getElementById("imp-label").textContent = imp.label;
+    document.getElementById("imp-detail").textContent =
+      `平均${imp.avg}回/ゲーム（計${imp.games}回 / ${imp.starts}スタート）` +
+      (state.allInLosses > 0 ? ` 全賭けハズレ${state.allInLosses}回` : "");
+  } else {
+    impSec.style.display = "none";
+  }
+
+  // History
+  const hs = state.history;
+  document.getElementById("history-section").style.display = hs.length > 0 ? "" : "none";
+  document.getElementById("history-list").innerHTML = hs.map(h => `
+    <div class="history-row">
+      <span class="history-left">
+        ${h.won ? "✅" : "❌"}
+        <span>${LABELS[h.picked]}選</span>
+        ${h.switched ? `<span class="history-switch">→${LABELS[h.finalPick]}変更</span>` : `<span class="history-stay">そのまま</span>`}
+        <span class="history-star">⭐${LABELS[h.answer]}</span>
+      </span>
+      <span class="history-gain ${h.won ? 'win' : 'lose'}">
+        ${h.won ? '+' + h.gain : h.gain}pt→${h.points}pt
+      </span>
+    </div>`).join("");
+
+  // Main area
+  const mainEl = document.getElementById("main-area");
+  const gameOver = state.points <= 0;
+
+  if (gameOver) {
+    mainEl.innerHTML = `
+      <div class="gameover">
+        <p class="gameover-title">💸 ゲームオーバー</p>
+        <p class="gameover-sub">ポイントがなくなりました</p>
+        <button class="btn-main" onclick="restart()">もう一度（統計は引き継ぎ）</button>
+      </div>`;
+    return;
+  }
+
+  if (state.phase === "bet") {
+    const stayEarn = Math.round(state.bet * state.stayMult) - state.bet;
+    const swEarn = Math.round(state.bet * state.swMult) - state.bet;
+    const quickBets = [1, 3, 5, 10].filter(v => v <= state.points);
+    mainEl.innerHTML = `
+      <p class="section-title">賭けるポイントを選んでください</p>
+      <div class="bet-row">
+        <button class="bet-spin" onclick="setBet(${state.bet - 1})">−</button>
+        <span class="bet-num">${state.bet}</span>
+        <button class="bet-spin" onclick="setBet(${state.bet + 1})">+</button>
+      </div>
+      <p class="bet-info">
+        そのまま当たり → <span class="gain-stay">${Math.round(state.bet * state.stayMult)}pt</span>（+${stayEarn}pt）<br>
+        変更して当たり → <span class="gain-sw">${Math.round(state.bet * state.swMult)}pt</span>（+${swEarn}pt）
+      </p>
+      <div class="quick-bets">
+        ${quickBets.map(v => `<button class="quick-bet${state.bet === v ? ' active' : ''}" onclick="setBet(${v})">${v}pt</button>`).join("")}
+        <button class="quick-bet allin${state.bet === state.points ? ' active' : ''}" onclick="setBet(${state.points})">全賭け</button>
+      </div>
+      <button class="btn-main" onclick="startPick()">決定！</button>`;
+    return;
+  }
+
+  // pick / switch / result
+  let msg = "", msgClass = "info";
+  if (state.phase === "switch") {
+    msg = `「${LABELS[state.revealed]}」はハズレでした！変更しますか？`;
+  } else if (state.phase === "result") {
+    const won = state.final === state.answer;
+    const switched = state.history[0].switched;
+    const mult = switched ? state.swMult : state.stayMult;
+    const gain = won ? Math.round(state.bet * mult) - state.bet : -state.bet;
+    msg = won ? `🎉 当たり！ +${gain}pt 獲得！` : `😢 ハズレ… -${state.bet}pt`;
+    msgClass = won ? "win" : "lose";
+  }
+
+  mainEl.innerHTML = `
+    <p class="bet-label">賭け: <span>${state.bet}pt</span></p>
+    <div class="boxes-row">
+      ${[0,1,2].map(i => `
+        <div class="box-wrap">
+          <div class="${boxClass(i)}" onclick="${state.phase === 'pick' ? `pickBox(${i})` : ''}">${boxEmoji(i)}</div>
+          <span class="box-lbl">${LABELS[i]}</span>
+        </div>`).join("")}
+    </div>
+    ${msg ? `<p class="message ${msgClass}">${msg}</p>` : ""}
+    ${state.phase === "switch" ? `
+      <div class="switch-row">
+        <button class="btn-stay" onclick="decide(false)">そのまま 👆<br><small>当たり3倍</small></button>
+        <button class="btn-switch" onclick="decide(true)">変更する 🔄<br><small>当たり2.5倍</small></button>
+      </div>
+      <div class="switch-hint">
+        <span>確率1/3 → 高倍率</span>
+        <span>確率2/3 → 低倍率</span>
+      </div>` : ""}
+    ${state.phase === "result" ? `
+      <button class="btn-main" style="margin-top:8px" onclick="reset()">もう一度賭ける</button>` : ""}`;
+}
+
+// 倍率編集
+let editingMult = null;
+function openMultEdit(which) {
+  editingMult = which;
+  document.getElementById('mult-display-row').style.display = 'none';
+  document.getElementById('mult-edit-row').style.display = '';
+  document.getElementById('mult-editing-label').textContent = which === 'stay' ? 'そのまま当たり倍率:' : '変更して当たり倍率:';
+  const inp = document.getElementById('mult-edit-input');
+  inp.value = which === 'stay' ? state.stayMult : state.swMult;
+  inp.className = 'mult-input' + (which === 'sw' ? ' sw' : '');
+  document.getElementById('mult-save-btn').className = 'save-btn' + (which === 'sw' ? ' sw' : '');
+  inp.focus();
+}
+function saveMult() {
+  const v = parseFloat(document.getElementById('mult-edit-input').value);
+  if (!isNaN(v) && v > 1) {
+    if (editingMult === 'stay') { state.stayMult = Math.round(v*10)/10; document.getElementById('stay-mult-label').textContent = state.stayMult; }
+    else { state.swMult = Math.round(v*10)/10; document.getElementById('sw-mult-label').textContent = state.swMult; }
+  }
+  document.getElementById('mult-display-row').style.display = '';
+  document.getElementById('mult-edit-row').style.display = 'none';
+  render();
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('mult-edit-row').style.display !== 'none') saveMult();
+});
+
+// 初回スタートカウント
+state.startCount = 1;
+render();
+</script>
+</body>
+</html>
