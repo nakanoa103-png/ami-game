@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Tactics</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>AI Tactics</h1>
+            <div class="turn-info">Player's Turn</div>
+        </header>
+        <main>
+            <div id="game-board"></div>
+            <aside id="side-panel">
+                <h2>ユニット情報</h2>
+                <div id="unit-info">
+                    <p>駒を選択してください</p>
+                </div>
+                
+                <h2 style="margin-top: 20px;">ルール</h2>
+                <div class="rules-text">
+                    <ul>
+                        <li><b>勝利条件:</b> 相手の「宝物」のHPを0にする。</li>
+                        <li><b>移動と攻撃:</b> 緑枠は移動、赤枠は攻撃。ダメージ＝(攻撃力 - 相手の防御力)。</li>
+                        <li><b>昇格 (成):</b> 歩兵が敵陣(奥3段)に入ると「歩+」になり、横や後ろにも動ける。</li>
+                        <li><b>ZOC (足止め):</b> 赤いマスの敵周囲に入ると、敵を攻撃する以外の移動ができなくなる。</li>
+                        <li><b>ZOC 解除:</b> 味方2体以上で敵を囲めば、その敵のZOCは消滅する。</li>
+                    </ul>
+                </div>
+            </aside>
+        </main>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
