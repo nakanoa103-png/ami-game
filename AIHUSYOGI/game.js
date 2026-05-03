@@ -473,8 +473,19 @@ class Game {
             this.showUnitInfo(null);
         }
     }
+
+    restart() {
+        this.board = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
+        this.currentPlayer = PLAYERS.P1;
+        this.selectedPiece = null;
+        this.state = 'PLAYING';
+        document.getElementById('app').classList.remove('turn-p1', 'turn-p2');
+        this.initBoard();
+        this.renderBoard();
+        this.updateUI();
+    }
 }
 
 window.onload = () => {
-    new Game();
+    window.gameInstance = new Game();
 };

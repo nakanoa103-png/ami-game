@@ -11,10 +11,12 @@
         <header>
             <h1>AI Tactics</h1>
             <div class="turn-info">Player's Turn</div>
+            <button id="restart-btn" onclick="window.gameInstance && window.gameInstance.restart()">🔄 再スタート</button>
         </header>
         <main>
             <div id="game-board"></div>
-            <aside id="side-panel">
+            <aside id="side-panel" class="open">
+                <button id="panel-toggle" onclick="togglePanel()">✕ 閉じる</button>
                 <h2>ユニット情報</h2>
                 <div id="unit-info">
                     <p>駒を選択してください</p>
@@ -31,8 +33,26 @@
                     </ul>
                 </div>
             </aside>
+            <button id="panel-open-btn" onclick="togglePanel()">📋</button>
         </main>
     </div>
     <script src="game.js"></script>
+    <script>
+        function togglePanel() {
+            const panel = document.getElementById('side-panel');
+            const openBtn = document.getElementById('panel-open-btn');
+            const toggleBtn = document.getElementById('panel-toggle');
+            const isOpen = panel.classList.contains('open');
+            if (isOpen) {
+                panel.classList.remove('open');
+                openBtn.style.display = 'flex';
+                toggleBtn.textContent = '≡ 開く';
+            } else {
+                panel.classList.add('open');
+                openBtn.style.display = 'none';
+                toggleBtn.textContent = '✕ 閉じる';
+            }
+        }
+    </script>
 </body>
 </html>
