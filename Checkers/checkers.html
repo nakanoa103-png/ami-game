@@ -391,6 +391,95 @@
   }
   .btn-new:hover { color: var(--text); }
 
+  /* ──── 先手/後手選択モーダル ──── */
+  #mode-select {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    background: rgba(10,10,20,0.92);
+    z-index: 300;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .mode-box {
+    background: var(--panel);
+    border: 2px solid #334;
+    border-radius: 12px;
+    padding: 36px 32px;
+    max-width: 440px;
+    width: 100%;
+    text-align: center;
+  }
+
+  .mode-box h2 {
+    font-size: 20px;
+    font-weight: 900;
+    margin-bottom: 6px;
+  }
+
+  .mode-box .mode-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 28px;
+    line-height: 1.8;
+  }
+
+  .mode-buttons {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .mode-btn {
+    flex: 1;
+    min-width: 160px;
+    background: var(--bg);
+    border: 2px solid #445;
+    border-radius: 10px;
+    padding: 20px 16px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    text-align: center;
+  }
+
+  .mode-btn:hover { border-color: var(--accent); background: rgba(233,69,96,0.07); }
+
+  .mode-btn .mode-icon { font-size: 36px; margin-bottom: 10px; }
+
+  .mode-btn .mode-label {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+
+  .mode-btn .mode-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.7;
+  }
+
+  .mode-btn.first  { border-color: #29b6d8; }
+  .mode-btn.first:hover  { border-color: #29b6d8; background: rgba(41,182,216,0.1); }
+  .mode-btn.second { border-color: var(--accent); }
+  .mode-btn.second:hover { border-color: var(--accent); background: rgba(233,69,96,0.1); }
+
+  /* 後手モード時のサブタイトル変化 */
+  .mode-badge {
+    display: inline-block;
+    font-size: 10px;
+    letter-spacing: 1px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 6px;
+    vertical-align: middle;
+    font-weight: 700;
+  }
+  .mode-badge.first-badge  { background: rgba(41,182,216,0.2); color: #29b6d8; border: 1px solid #29b6d8; }
+  .mode-badge.second-badge { background: rgba(233,69,96,0.2);  color: var(--accent); border: 1px solid var(--accent); }
+
   footer {
     padding: 16px;
     font-size: 11px;
@@ -402,10 +491,33 @@
 </head>
 <body>
 
+<!-- 先手/後手選択モーダル -->
+<div id="mode-select">
+  <div class="mode-box">
+    <h2>先手 / 後手を選んでください</h2>
+    <div class="mode-sub">
+      チェッカーでは先手（上側・赤）が有利とされています。<br>
+      AIの指し手を観察するなら後手がおすすめです。
+    </div>
+    <div class="mode-buttons">
+      <button class="mode-btn first" onclick="startGame('first')">
+        <div class="mode-icon">🔵</div>
+        <div class="mode-label">先手（あなたが先）</div>
+        <div class="mode-desc">あなたが最初に動きます。<br>通常モード。</div>
+      </button>
+      <button class="mode-btn second" onclick="startGame('second')">
+        <div class="mode-icon">🔴</div>
+        <div class="mode-label">後手（AIが先）</div>
+        <div class="mode-desc">AIが先に動きます。<br>AIの戦略を観察できます。</div>
+      </button>
+    </div>
+  </div>
+</div>
+
 <header>
   <div class="header-eyebrow">1959 · IBM 701 · Arthur Samuel</div>
   <h1>チェッカー <span>CHECKERS</span></h1>
-  <div class="subtitle">サミュエルが機械学習を教えたゲーム ── あなたはAIに勝てますか？</div>
+  <div class="subtitle" id="subtitle">サミュエルが機械学習を教えたゲーム ── あなたはAIに勝てますか？</div>
 </header>
 
 <div class="game-wrap">
@@ -455,8 +567,8 @@
       <p id="advice-text"></p>
     </div>
     <div class="samuel-note" id="samuel-note"></div>
-    <button class="btn-restart" onclick="restartGame()">もう一度挑戦する</button><br>
-    <button class="btn-new" onclick="restartGame()">新しいゲーム</button>
+    <button class="btn-restart" onclick="restartGame()">同じモードでもう一度</button><br>
+    <button class="btn-new" onclick="showModeSelect()">先手/後手を変える</button>
   </div>
 </div>
 
@@ -479,8 +591,57 @@ let captureCount = { player: 0, ai: 0 };
 let kingMoves = { player: 0, ai: 0 };
 
 // 引き分け判定用
-let positionHistory = [];   // 局面ハッシュの履歴（3回同局面→引き分け）
-let noProgressCount = 0;    // 駒取りもキング昇格もない手の連続回数（40手→引き分け）
+let positionHistory = [];
+let noProgressCount = 0;
+
+// 先手/後手モード
+let playerMode = 'first'; // 'first'=先手(プレイヤーが先) / 'second'=後手(AIが先)
+
+function showModeSelect() {
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('mode-select').style.display = 'flex';
+}
+
+function startGame(mode) {
+  playerMode = mode;
+  document.getElementById('mode-select').style.display = 'none';
+
+  // サブタイトルにモード表示
+  const sub = document.getElementById('subtitle');
+  if (mode === 'first') {
+    sub.innerHTML = 'サミュエルが機械学習を教えたゲーム ── あなたはAIに勝てますか？ <span class="mode-badge first-badge">先手</span>';
+  } else {
+    sub.innerHTML = 'サミュエルが機械学習を教えたゲーム ── AIの戦略を観察しよう <span class="mode-badge second-badge">後手</span>';
+  }
+
+  resetGameState();
+  renderBoard();
+
+  if (mode === 'second') {
+    // 後手モード：AIが先に動く
+    currentTurn = 'ai';
+    setTurnUI('ai');
+    log('後手モード：AIが先手です');
+    setTimeout(doAIMove, 800);
+  } else {
+    setTurnUI('player');
+    log('先手モード：あなたが先手です');
+  }
+}
+
+function resetGameState() {
+  document.getElementById('log').innerHTML = '';
+  stopMustBlink();
+  selected = null; validMoves = [];
+  currentTurn = 'player';
+  gameOver = false;
+  captureCount = { player: 0, ai: 0 };
+  kingMoves = { player: 0, ai: 0 };
+  moveHistory = { player: [], ai: [] };
+  positionHistory = [];
+  noProgressCount = 0;
+  initBoard();
+}
 
 function initBoard() {
   board = Array(8).fill(null).map(() => Array(8).fill(EMPTY));
@@ -1015,24 +1176,25 @@ function endGame(winner, reason) {
 
 function restartGame() {
   document.getElementById('overlay').classList.remove('show');
-  document.getElementById('log').innerHTML = '';
-  stopMustBlink();
-  selected = null; validMoves = [];
-  currentTurn = 'player';
-  gameOver = false;
-  captureCount = { player: 0, ai: 0 };
-  kingMoves = { player: 0, ai: 0 };
-  moveHistory = { player: [], ai: [] };
-  positionHistory = [];
-  noProgressCount = 0;
-  initBoard();
+  resetGameState();
   renderBoard();
-  setTurnUI('player');
-  log('ゲームスタート！');
+
+  if (playerMode === 'second') {
+    currentTurn = 'ai';
+    setTurnUI('ai');
+    log('後手モード：AIが先手です');
+    setTimeout(doAIMove, 800);
+  } else {
+    setTurnUI('player');
+    log('先手モード：あなたが先手です');
+  }
 }
 
-// ──── 起動 ────
-restartGame();
+// ──── 起動：モーダルを表示して待機 ────
+(function init() {
+  initBoard();
+  renderBoard();
+})();
 </script>
 </body>
 </html>
