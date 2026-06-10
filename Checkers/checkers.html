@@ -94,8 +94,8 @@
   }
 
   .cell {
-    width: 60px;
-    height: 60px;
+    width: 48px;
+    height: 48px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -104,13 +104,50 @@
   }
 
   @media (max-width: 520px) {
-    .cell { width: 40px; height: 40px; }
+    .cell { width: 36px; height: 36px; }
+  }
+
+  /* 黒マスの番号 */
+  .cell-num {
+    position: absolute;
+    bottom: 2px;
+    right: 3px;
+    font-size: 9px;
+    color: rgba(255,255,255,0.35);
+    font-family: monospace;
+    line-height: 1;
+    pointer-events: none;
+    user-select: none;
   }
 
   .cell.dark  { background: var(--board-dark); }
   .cell.light { background: var(--board-light); }
   .cell.highlight { background: #1e5c3a; }
   .cell.capture-hint { background: #5c1e1e; }
+
+  /* 孔明モード：罠のある移動先セルを強調 */
+  .cell.trap-dest {
+    background: rgba(200,100,0,0.55) !important;
+    outline: 2px solid #c8a400;
+    outline-offset: -2px;
+  }
+
+  /* 孔明バナー（ボード下） */
+  #koumei-banner {
+    width: 100%;
+    max-width: 384px; /* 48px×8 */
+    min-height: 36px;
+    background: rgba(200,164,0,0.12);
+    border: 1px solid #c8a400;
+    border-radius: 6px;
+    padding: 7px 12px;
+    font-size: 12px;
+    color: #e8c800;
+    font-family: monospace;
+    line-height: 1.6;
+    display: none;
+  }
+  #koumei-banner.show { display: block; }
 
   .piece {
     width: 78%;
@@ -247,19 +284,6 @@
 
   .dot-player { width: 16px; height: 16px; border-radius: 50%; background: #29b6d8; flex-shrink: 0; border: 2px solid rgba(255,255,255,0.4); }
   .dot-ai     { width: 16px; height: 16px; border-radius: 50%; background: var(--ai-piece); flex-shrink: 0; }
-
-  #turn-indicator {
-    font-size: 13px;
-    padding: 6px 12px;
-    border-radius: 20px;
-    text-align: center;
-    font-weight: 700;
-    margin-top: 8px;
-  }
-
-  #turn-indicator.your-turn { background: rgba(0,255,136,0.15); color: #00ff88; border: 1px solid #00ff88; }
-  #turn-indicator.ai-turn   { background: rgba(233,69,96,0.15);  color: var(--accent); border: 1px solid var(--accent); }
-
   .log-box {
     max-height: 130px;
     overflow-y: auto;
@@ -391,9 +415,154 @@
   }
   .btn-new:hover { color: var(--text); }
 
-  /* ──── 先手/後手選択モーダル ──── */
-  #mode-select {
+  /* ──── 孔明の罠モード ──── */
+
+  /* ボード上のトグルバナー */
+  #koumei-bar {
     display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: var(--panel);
+    border: 1px solid #334;
+    border-radius: 8px;
+    padding: 10px 14px;
+    width: 100%;
+    max-width: 480px;
+    margin-bottom: 8px;
+  }
+
+  #koumei-bar.active {
+    border-color: #c8a400;
+    background: rgba(200,164,0,0.08);
+  }
+
+  .koumei-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-muted);
+  }
+
+  #koumei-bar.active .koumei-bar-left { color: #c8a400; }
+
+  .koumei-bar-left .k-icon { font-size: 20px; }
+
+  .toggle-switch {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+
+  .toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: #334;
+    border-radius: 24px;
+    cursor: pointer;
+    transition: background 0.25s;
+  }
+
+  .toggle-slider:before {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    left: 3px;
+    top: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.25s;
+  }
+
+  .toggle-switch input:checked + .toggle-slider { background: #c8a400; }
+  .toggle-switch input:checked + .toggle-slider:before { transform: translateX(20px); }
+
+  /* ボードを包むラッパー */
+  .board-wrap {
+    position: relative;
+    display: inline-block;
+  }
+
+  /* 孔明トグル（SCOREカード内） */
+  #koumei-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #2a3040;
+  }
+
+  #koumei-bar.active .koumei-bar-left { color: #c8a400; }
+
+  .koumei-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+  }
+
+  .koumei-bar-left .k-icon { font-size: 16px; }
+
+  .toggle-switch {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+
+  .toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: #334;
+    border-radius: 24px;
+    cursor: pointer;
+    transition: background 0.25s;
+  }
+
+  .toggle-slider:before {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    left: 3px;
+    top: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.25s;
+  }
+
+  .toggle-switch input:checked + .toggle-slider { background: #c8a400; }
+  .toggle-switch input:checked + .toggle-slider:before { transform: translateX(20px); }
+
+  /* 孔明警告バナー（SCOREカード内、トグルの下） */
+  #koumei-banner {
+    display: none;
+    margin-top: 8px;
+    padding: 7px 10px;
+    background: rgba(200,164,0,0.12);
+    border: 1px solid #c8a400;
+    border-radius: 6px;
+    font-size: 11px;
+    color: #e8c800;
+    font-family: monospace;
+    line-height: 1.8;
+  }
+  #koumei-banner.show { display: block; }
+  .btn-force-move:hover { color: #ccc; }
+  #mode-select {
+    display: none;
     position: fixed;
     inset: 0;
     background: rgba(10,10,20,0.92);
@@ -402,6 +571,8 @@
     justify-content: center;
     padding: 24px;
   }
+
+  #mode-select.show { display: flex; }
 
   .mode-box {
     background: var(--panel);
@@ -523,7 +694,9 @@
 <div class="game-wrap">
   <!-- ボード -->
   <div class="board-section">
-    <div id="board"></div>
+    <div class="board-wrap">
+      <div id="board"></div>
+    </div>
   </div>
 
   <!-- サイドパネル -->
@@ -534,7 +707,18 @@
         <div class="piece-count"><span class="dot-player"></span> あなた <span id="player-count">12</span></div>
         <div class="piece-count"><span class="dot-ai"></span> AI <span id="ai-count">12</span></div>
       </div>
-      <div id="turn-indicator" class="your-turn">あなたの番</div>
+      <!-- 孔明トグル：turn-indicatorの代わり -->
+      <div id="koumei-bar">
+        <div class="koumei-bar-left">
+          <span class="k-icon">🪖</span>孔明の罠察知
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="koumei-toggle" onchange="toggleKoumei(this)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <!-- 孔明警告バナー：トグルの直下 -->
+      <div id="koumei-banner"></div>
     </div>
 
     <div class="info-card">
@@ -544,7 +728,7 @@
 
     <div class="rules-card">
       <h3>RULES</h3>
-      ● 黄色＝あなた　赤＝AI<br>
+      ● 水色＝あなた　赤＝AI<br>
       ● 駒は斜め前にだけ進める<br>
       ● 相手を飛び越えると取れる<br>
       ● 取れる場面は必ず取る（強制取り）<br>
@@ -554,8 +738,6 @@
     </div>
   </div>
 </div>
-
-<div id="toast"></div>
 
 <!-- ゲームオーバーオーバーレイ -->
 <div id="overlay">
@@ -595,18 +777,153 @@ let positionHistory = [];
 let noProgressCount = 0;
 
 // 先手/後手モード
-let playerMode = 'first'; // 'first'=先手(プレイヤーが先) / 'second'=後手(AIが先)
+let playerMode = 'first';
+
+// 孔明の罠察知モード
+let koumeiMode = false;
+let koumeiPendingMove = null; // 警告中の手を保留
+
+function toggleKoumei(el) {
+  koumeiMode = el.checked;
+  const bar = document.getElementById('koumei-bar');
+  if (koumeiMode) bar.classList.add('active');
+  else {
+    bar.classList.remove('active');
+    clearKoumeiBanner();
+  }
+}
+
+// チェッカー公式番号：黒マス左上から右→下の順で1〜32
+// 行0:奇数列(1,3,5,7)→1〜4、行1:偶数列(0,2,4,6)→5〜8 ... 交互
+function rcToNum(r, c) {
+  // 黒マスは(r+c)%2===1
+  if ((r + c) % 2 === 0) return null;
+  let num = 0;
+  for (let row = 0; row < r; row++) {
+    for (let col = 0; col < 8; col++) {
+      if ((row + col) % 2 === 1) num++;
+    }
+  }
+  for (let col = 0; col < c; col++) {
+    if ((r + col) % 2 === 1) num++;
+  }
+  return num + 1;
+}
+
+function detectKoumeiTrap(move) {
+  const nextBoard = applyMove(board, move);
+  const aiCaps = getAllCaptures(nextBoard, 'ai');
+  let maxCaptures = 0;
+  for (const cap of aiCaps) {
+    let count = 1;
+    let simB = applyMove(nextBoard, cap);
+    let pos = cap.to;
+    for (let i = 0; i < 10; i++) {
+      const chain = getCaptures(simB, pos[0], pos[1]);
+      if (chain.length === 0) break;
+      simB = applyMove(simB, chain[0]);
+      pos = chain[0].to;
+      count++;
+    }
+    maxCaptures = Math.max(maxCaptures, count);
+  }
+  return maxCaptures;
+}
+
+function clearKoumeiBanner() {
+  const b = document.getElementById('koumei-banner');
+  b.textContent = '';
+  b.classList.remove('show');
+}
+
+// 死亡宣告メッセージ（強制取りで取るしかないが連続取りされる場合）
+const DOOMED_MSGS = [
+  'お前はもう死んでいる…',
+  '他に選択肢はない。やるしかない。',
+  '逃げ場なし。覚悟を決めろ。',
+  '孔明、すでに罠を張り終えている。',
+  '取るしかないが、その先に地獄が待つ。',
+  '運命は決まった。せめて華々しく散れ。',
+];
+
+function updateKoumeiBanner(fromR, fromC, moves) {
+  if (!koumeiMode || !selected) { clearKoumeiBanner(); return; }
+
+  const trapMoves   = []; // 通常移動で罠になる手
+  const doomedMoves = []; // 強制取りだが取った後に連続取りされる手
+
+  for (const m of moves) {
+    if (m.cap) {
+      // 強制取り：取った後にAIがさらに連続取りできるか調べる
+      const afterBoard = applyMove(board, m);
+      // 取った後にプレイヤーの連続取りがない場合のみ（連続取り中は別途チェック）
+      const playerChain = getCaptures(afterBoard, m.to[0], m.to[1]);
+      if (playerChain.length === 0) {
+        // AIが連続取りできる枚数を計算
+        const aiCaps = getAllCaptures(afterBoard, 'ai');
+        let maxAI = 0;
+        for (const ac of aiCaps) {
+          let cnt = 1, simB = applyMove(afterBoard, ac), pos = ac.to;
+          for (let i = 0; i < 10; i++) {
+            const ch = getCaptures(simB, pos[0], pos[1]);
+            if (ch.length === 0) break;
+            simB = applyMove(simB, ch[0]); pos = ch[0].to; cnt++;
+          }
+          maxAI = Math.max(maxAI, cnt);
+        }
+        if (maxAI >= 2) {
+          const fromNum = rcToNum(m.from[0], m.from[1]);
+          const toNum   = rcToNum(m.to[0],   m.to[1]);
+          doomedMoves.push({ fromNum, toNum, count: maxAI });
+        }
+      }
+    } else {
+      // 通常移動：罠チェック
+      const count = detectKoumeiTrap(m);
+      if (count >= 2) {
+        const fromNum = rcToNum(m.from[0], m.from[1]);
+        const toNum   = rcToNum(m.to[0],   m.to[1]);
+        trapMoves.push({ fromNum, toNum, count });
+      }
+    }
+  }
+
+  const banner = document.getElementById('koumei-banner');
+  const lines = [];
+
+  if (doomedMoves.length > 0) {
+    // 死亡宣告：ランダムメッセージ
+    const msg = DOOMED_MSGS[Math.floor(Math.random() * DOOMED_MSGS.length)];
+    lines.push(`💀 ${msg}`);
+    doomedMoves.forEach(d =>
+      lines.push(`　${d.fromNum}→${d.toNum} で取るしかないが、その後${d.count}枚取りされる`)
+    );
+  }
+
+  trapMoves.forEach(t =>
+    lines.push(`🪖 ${t.fromNum}→${t.toNum} は罠！ ${t.count}枚取りされます`)
+  );
+
+  if (lines.length === 0) {
+    clearKoumeiBanner();
+  } else {
+    banner.innerHTML = lines.join('<br>');
+    banner.classList.add('show');
+  }
+}
+
+function koumeiCancel() {}  // バナー方式では不要（残骸を残しておく）
+function koumeiForce()  {}  // 同上
 
 function showModeSelect() {
   document.getElementById('overlay').classList.remove('show');
-  document.getElementById('mode-select').style.display = 'flex';
+  document.getElementById('mode-select').classList.add('show');
 }
 
 function startGame(mode) {
   playerMode = mode;
-  document.getElementById('mode-select').style.display = 'none';
+  document.getElementById('mode-select').classList.remove('show');
 
-  // サブタイトルにモード表示
   const sub = document.getElementById('subtitle');
   if (mode === 'first') {
     sub.innerHTML = 'サミュエルが機械学習を教えたゲーム ── あなたはAIに勝てますか？ <span class="mode-badge first-badge">先手</span>';
@@ -618,7 +935,6 @@ function startGame(mode) {
   renderBoard();
 
   if (mode === 'second') {
-    // 後手モード：AIが先に動く
     currentTurn = 'ai';
     setTurnUI('ai');
     log('後手モード：AIが先手です');
@@ -880,8 +1196,27 @@ function renderBoard(aiHighlight) {
       const [sr,sc] = selected;
       if (!(r===sr&&c===sc)) {
         const move = validMoves.find(m=>m.to[0]===r&&m.to[1]===c);
-        if (move) cell.classList.add(move.cap ? 'capture-hint' : 'highlight');
+        if (move) {
+          if (move.cap) {
+            cell.classList.add('capture-hint');
+          } else {
+            // 孔明モードON時は罠の移動先を別色に
+            if (koumeiMode && detectKoumeiTrap(move) >= 2) {
+              cell.classList.add('trap-dest');
+            } else {
+              cell.classList.add('highlight');
+            }
+          }
+        }
       }
+    }
+
+    // 黒マスに番号表示
+    if ((r + c) % 2 === 1) {
+      const num = document.createElement('span');
+      num.className = 'cell-num';
+      num.textContent = rcToNum(r, c);
+      cell.appendChild(num);
     }
 
     if (board[r][c] !== EMPTY) {
@@ -965,9 +1300,14 @@ function onCellClick(e) {
 
   if (selected) {
     const move = validMoves.find(m=>m.to[0]===r&&m.to[1]===c);
-    if (move) { executePlayerMove(move); return; }
+    if (move) {
+      clearKoumeiBanner();
+      executePlayerMove(move);
+      return;
+    }
     if (isPlayerPiece(v)) { selectPiece(r,c); return; }
     selected = null; validMoves = [];
+    clearKoumeiBanner();
     renderBoard();
     return;
   }
@@ -991,7 +1331,9 @@ function selectPiece(r,c) {
     selected = [r,c]; validMoves = moves;
   }
   renderBoard();
+  updateKoumeiBanner(r, c, validMoves);
 }
+
 
 function executePlayerMove(move, isChain=false) {
   const wasKing = isKing(board[move.from[0]][move.from[1]]);
@@ -1027,14 +1369,7 @@ function executePlayerMove(move, isChain=false) {
 }
 
 function setTurnUI(turn, chain=false) {
-  const el = document.getElementById('turn-indicator');
-  if (chain) {
-    el.textContent = '連続取り中…'; el.className = 'chain-turn';
-  } else if (turn==='player') {
-    el.textContent = 'あなたの番'; el.className = 'your-turn';
-  } else {
-    el.textContent = 'AIが考え中…'; el.className = 'ai-turn';
-  }
+  // turn-indicatorは廃止。AIターン中はクリック無効で十分。
 }
 
 function doAIMove() {
@@ -1194,6 +1529,7 @@ function restartGame() {
 (function init() {
   initBoard();
   renderBoard();
+  document.getElementById('mode-select').classList.add('show');
 })();
 </script>
 </body>
