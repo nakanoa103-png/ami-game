@@ -478,6 +478,10 @@ let moveHistory = { player: [], ai: [] };
 let captureCount = { player: 0, ai: 0 };
 let kingMoves = { player: 0, ai: 0 };
 
+// 引き分け判定用
+let positionHistory = [];   // 局面ハッシュの履歴（3回同局面→引き分け）
+let noProgressCount = 0;    // 駒取りもキング昇格もない手の連続回数（40手→引き分け）
+
 function initBoard() {
   board = Array(8).fill(null).map(() => Array(8).fill(EMPTY));
   for (let r = 0; r < 3; r++) {
@@ -577,16 +581,62 @@ function countPieces(b) {
   return {p,a};
 }
 
+// ──── 局面ハッシュ（引き分け判定用） ────
+function boardHash(b) {
+  return b.map(row => row.join('')).join('|');
+}
+
+function recordPosition(wasCapture, wasPromotion) {
+  if (wasCapture || wasPromotion) {
+    // 取りかキング昇格があればリセット
+    positionHistory = [];
+    noProgressCount = 0;
+  } else {
+    noProgressCount++;
+  }
+  positionHistory.push(boardHash(board));
+}
+
+function checkDraw() {
+  // ① 40手無進捗（取りもキング昇格もなし）
+  if (noProgressCount >= 40) return '40手以上、駒取りもキング昇格もない状態が続きました';
+  // ② 同一局面3回
+  const last = positionHistory[positionHistory.length - 1];
+  const count = positionHistory.filter(h => h === last).length;
+  if (count >= 3) return '同じ局面が3回繰り返されました';
+  return null;
+}
+
 // ──── AIロジック (minimax + alpha-beta) ────
 function evaluate(b) {
   let score = 0;
   for (let r=0;r<8;r++) for (let c=0;c<8;c++) {
     const v = b[r][c];
-    if (v === AI)          score += 100 + r*5 + (c===0||c===7?3:0);
-    else if (v === AI_KING)      score += 160;
-    else if (v === PLAYER)       score -= 100 + (7-r)*5 + (c===0||c===7?3:0);
-    else if (v === PLAYER_KING)  score -= 160;
+    if (v === AI) {
+      score += 100;
+      score += r * 4;                          // 前進ボーナス
+      if (c > 0 && c < 7) score += 8;         // 中央ボーナス（端ペナルティの逆）
+      if (c === 0 || c === 7) score -= 12;     // 端ペナルティ（逃げ込み抑制）
+    } else if (v === AI_KING) {
+      score += 160;
+      if (c === 0 || c === 7) score -= 20;     // キングも端に逃げるのを抑制
+      // 中央4列にいるとボーナス
+      if (c >= 2 && c <= 5) score += 15;
+    } else if (v === PLAYER) {
+      score -= 100;
+      score -= (7 - r) * 4;
+      if (c > 0 && c < 7) score -= 8;
+      if (c === 0 || c === 7) score += 12;
+    } else if (v === PLAYER_KING) {
+      score -= 160;
+      if (c === 0 || c === 7) score += 20;
+      if (c >= 2 && c <= 5) score -= 15;
+    }
   }
+  // モビリティ評価（動ける手の数）
+  const aiMoves    = getAllMoves(b, 'ai').length;
+  const playerMoves = getAllMoves(b, 'player').length;
+  score += (aiMoves - playerMoves) * 3;
   return score;
 }
 
@@ -785,14 +835,14 @@ function selectPiece(r,c) {
 function executePlayerMove(move, isChain=false) {
   const wasKing = isKing(board[move.from[0]][move.from[1]]);
   board = applyMove(board, move);
+  const promoted = !wasKing && isKing(board[move.to[0]][move.to[1]]);
   if (move.cap) {
     captureCount.player++;
     log('▶ あなたが取った！');
   }
-  const nowKing = isKing(board[move.to[0]][move.to[1]]);
-  if (!wasKing && nowKing) { kingMoves.player++; log('👑 キング昇格！'); }
+  if (promoted) { kingMoves.player++; log('👑 キング昇格！'); }
 
-  // 連続取り
+  // 連続取り中はまだrecordPositionしない
   const extra = move.cap ? getCaptures(board, move.to[0], move.to[1]) : [];
   if (extra.length > 0) {
     selected = move.to; validMoves = extra;
@@ -801,6 +851,9 @@ function executePlayerMove(move, isChain=false) {
     log('♻ 続けて取れます');
     return;
   }
+
+  // 1手完了時点で局面記録
+  recordPosition(!!move.cap, promoted);
 
   selected = null; validMoves = [];
   renderBoard();
@@ -827,10 +880,10 @@ function doAIMove() {
   const move = getBestAIMove();
   if (!move) { endGame('player','AIが動けなくなりました'); return; }
 
-  // AI連続取り手順をすべて計算してからアニメ再生
+  // AI連続取り手順を事前計算（取りの手のときだけ）
   const steps = [move];
-  let simBoard = applyMove(board, move);
-  if (move.cap) {
+  if (move.cap) {  // ← 取りの手のときだけ連続取りを計算
+    let simBoard = applyMove(board, move);
     let pos = move.to;
     for (let i=0; i<10; i++) {
       const extra = getCaptures(simBoard, pos[0], pos[1]);
@@ -851,21 +904,25 @@ function doAIMove() {
     const nowKing = isKing(board[s.to[0]][s.to[1]]);
     if (!wasKing && nowKing) { kingMoves.ai++; log('👑 AIがキング昇格'); }
 
-    // この手のfrom/to/capをハイライト付きで描画
     renderBoard({ from: s.from, to: s.to, cap: s.cap || null });
 
     stepIdx++;
     if (stepIdx < steps.length) {
-      // 次の連続取りへ
       setTurnUI('ai', true);
       setTimeout(playStep, 500);
     } else {
       // 全手終了
+      const anyCapture = steps.some(s => s.cap);
+      const anyPromotion = steps.some(s => isKing(board[s.to[0]][s.to[1]]));
+      recordPosition(anyCapture, anyPromotion);
       moveHistory.ai.push(move);
       setTimeout(() => {
+        // ① currentTurnをplayerに切り替えてから
+        currentTurn = 'player';
+        // ② renderBoard（ここで初めてmust-move判定が走る）
         renderBoard();
         if (checkGameOver()) return;
-        currentTurn = 'player';
+        // ③ ターン表示を更新
         setTurnUI('player');
       }, 400);
     }
@@ -880,6 +937,8 @@ function checkGameOver() {
   if (p === 0) { endGame('ai','あなたの駒がなくなりました'); return true; }
   if (getAllMoves(board,'player').length === 0) { endGame('ai','動ける場所がありません'); return true; }
   if (getAllMoves(board,'ai').length === 0) { endGame('player','AIが動けなくなりました'); return true; }
+  const drawReason = checkDraw();
+  if (drawReason) { endGame('draw', drawReason); return true; }
   return false;
 }
 
@@ -931,7 +990,13 @@ function endGame(winner, reason) {
 
   overlay.classList.add('show');
 
-  if (winner === 'player') {
+  if (winner === 'draw') {
+    title.textContent = '🤝 引き分け';
+    title.className = 'draw';
+    reasonEl.textContent = reason;
+    adviceSection.style.display = 'none';
+    samuelEl.textContent = `チェッカーは完全解析済みのゲームで、両者が最善を尽くせば必ず引き分けになります。サミュエルのプログラムもこの「引き分けの壁」と戦い続けました。`;
+  } else if (winner === 'player') {
     title.textContent = '🎉 あなたの勝ち！';
     title.className = 'win';
     reasonEl.textContent = reason;
@@ -958,6 +1023,8 @@ function restartGame() {
   captureCount = { player: 0, ai: 0 };
   kingMoves = { player: 0, ai: 0 };
   moveHistory = { player: [], ai: [] };
+  positionHistory = [];
+  noProgressCount = 0;
   initBoard();
   renderBoard();
   setTurnUI('player');
