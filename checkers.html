@@ -1,0 +1,1536 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>チェッカー｜アーサー・サミュエルのAIで遊ぼう</title>
+<style>
+
+
+  :root {
+    --bg: #1a1a2e;
+    --panel: #16213e;
+    --board-dark: #0f3460;
+    --board-light: #e8d5b7;
+    --accent: #e94560;
+    --accent2: #f5a623;
+    --text: #eaeaea;
+    --text-muted: #8899aa;
+    --player-piece: #f0e68c;
+    --player-king: #ffd700;
+    --ai-piece: #c0392b;
+    --ai-king: #ff6b6b;
+    --selected: #00ff88;
+    --movable: #00cc66;
+    --capture: #ff4444;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Meiryo', 'メイリオ', 'Yu Gothic', 'YuGothic', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  header {
+    width: 100%;
+    padding: 20px 24px 12px;
+    text-align: center;
+    border-bottom: 1px solid #223;
+  }
+
+  .header-eyebrow {
+    font-family: monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  h1 {
+    font-size: clamp(22px, 5vw, 36px);
+    font-weight: 900;
+    letter-spacing: -1px;
+  }
+
+  h1 span { color: var(--accent2); }
+
+  .subtitle {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  .game-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 24px;
+    padding: 24px 16px;
+    width: 100%;
+    max-width: 900px;
+  }
+
+  /* ──── ボード ──── */
+  .board-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  #board {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    border: 3px solid var(--accent);
+    box-shadow: 0 0 30px rgba(233,69,96,0.3);
+    cursor: pointer;
+  }
+
+  .cell {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: background 0.15s;
+  }
+
+  @media (max-width: 520px) {
+    .cell { width: 36px; height: 36px; }
+  }
+
+  /* 黒マスの番号 */
+  .cell-num {
+    position: absolute;
+    bottom: 2px;
+    right: 3px;
+    font-size: 9px;
+    color: rgba(255,255,255,0.35);
+    font-family: monospace;
+    line-height: 1;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .cell.dark  { background: var(--board-dark); }
+  .cell.light { background: var(--board-light); }
+  .cell.highlight { background: #1e5c3a; }
+  .cell.capture-hint { background: #5c1e1e; }
+
+  /* 孔明モード：罠のある移動先セルを強調 */
+  .cell.trap-dest {
+    background: rgba(200,100,0,0.55) !important;
+    outline: 2px solid #c8a400;
+    outline-offset: -2px;
+  }
+
+  /* 孔明バナー（ボード下） */
+  #koumei-banner {
+    width: 100%;
+    max-width: 384px; /* 48px×8 */
+    min-height: 36px;
+    background: rgba(200,164,0,0.12);
+    border: 1px solid #c8a400;
+    border-radius: 6px;
+    padding: 7px 12px;
+    font-size: 12px;
+    color: #e8c800;
+    font-family: monospace;
+    line-height: 1.6;
+    display: none;
+  }
+  #koumei-banner.show { display: block; }
+
+  .piece {
+    width: 78%;
+    height: 78%;
+    border-radius: 50%;
+    border: 3px solid rgba(255,255,255,0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    transition: transform 0.15s, box-shadow 0.15s;
+    position: relative;
+    user-select: none;
+  }
+
+  @media (max-width: 520px) {
+    .piece { font-size: 12px; border-width: 2px; }
+  }
+
+  .piece.player {
+    background: radial-gradient(circle at 30% 28%, #ffffff, #7ecfef, #2196c4);
+    border: 3px solid #ffffff;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.55), inset 0 2px 4px rgba(255,255,255,0.7);
+  }
+
+  /* プレイヤーキング：ゴールド、サイズ強調 */
+  .piece.player.king-piece {
+    background: radial-gradient(circle at 30% 28%, #ffffff, #ffe566, #d4a000);
+    border: 4px solid #ffd700;
+    box-shadow: 0 0 0 3px #a07000, 0 3px 12px rgba(0,0,0,0.6), inset 0 2px 4px rgba(255,255,255,0.6);
+    font-size: 20px;
+  }
+
+  .piece.ai {
+    background: radial-gradient(circle at 30% 28%, #ffaaaa, #e03030, #8b0000);
+    border: 3px solid #ff6060;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.55), inset 0 2px 4px rgba(255,180,180,0.4);
+  }
+
+  /* AIキング：濃い赤＋黒リング */
+  .piece.ai.king-piece {
+    background: radial-gradient(circle at 30% 28%, #ffcccc, #cc2020, #5a0000);
+    border: 4px solid #ff2020;
+    box-shadow: 0 0 0 3px #300000, 0 3px 12px rgba(0,0,0,0.7), inset 0 2px 4px rgba(255,150,150,0.3);
+    font-size: 20px;
+  }
+
+  .piece.selected {
+    box-shadow: 0 0 0 4px #00ff88, 0 3px 8px rgba(0,0,0,0.5) !important;
+    transform: scale(1.12);
+  }
+
+  /* 強制取り：動かせない自駒を暗くする */
+  .piece.cannot-move {
+    opacity: 0.28;
+    filter: grayscale(60%);
+  }
+
+  /* AIの動きハイライト */
+  .cell.ai-from { background: rgba(233,69,96,0.25) !important; }
+  .cell.ai-to   { background: rgba(233,69,96,0.55) !important; }
+  .cell.ai-cap  { background: rgba(255,80,80,0.35) !important; }
+
+  /* トースト通知 */
+  #toast {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.85);
+    background: rgba(20,20,40,0.95);
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 14px;
+    padding: 12px 24px;
+    border-radius: 8px;
+    z-index: 200;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    text-align: center;
+    max-width: 280px;
+  }
+  #toast.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  /* 連続取り中のターン表示 */
+  #turn-indicator.chain-turn {
+    background: rgba(255,153,0,0.18);
+    color: #ff9900;
+    border: 1px solid #ff9900;
+  }
+
+  /* ──── サイドパネル ──── */
+  .side-panel {
+    width: 260px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .info-card {
+    background: var(--panel);
+    border: 1px solid #223;
+    border-radius: 8px;
+    padding: 16px;
+  }
+
+  .info-card h3 {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 10px;
+    font-family: monospace;
+  }
+
+  .status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .piece-count {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .dot-player { width: 16px; height: 16px; border-radius: 50%; background: #29b6d8; flex-shrink: 0; border: 2px solid rgba(255,255,255,0.4); }
+  .dot-ai     { width: 16px; height: 16px; border-radius: 50%; background: var(--ai-piece); flex-shrink: 0; }
+  .log-box {
+    max-height: 130px;
+    overflow-y: auto;
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.8;
+    font-family: monospace;
+  }
+
+  .log-box::-webkit-scrollbar { width: 4px; }
+  .log-box::-webkit-scrollbar-thumb { background: #334; border-radius: 2px; }
+
+  /* ──── ルール説明 ──── */
+  .rules-card {
+    background: var(--panel);
+    border: 1px solid #223;
+    border-radius: 8px;
+    padding: 16px;
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.9;
+  }
+
+  .rules-card h3 {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent2);
+    margin-bottom: 8px;
+    font-family: monospace;
+  }
+
+  /* ──── ゲームオーバー ──── */
+  #overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(10,10,20,0.88);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  #overlay.show { display: flex; }
+
+  .result-box {
+    background: var(--panel);
+    border: 2px solid var(--accent);
+    border-radius: 12px;
+    padding: 32px;
+    max-width: 480px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 0 60px rgba(233,69,96,0.4);
+  }
+
+  .result-box h2 {
+    font-size: 28px;
+    font-weight: 900;
+    margin-bottom: 8px;
+  }
+
+  .result-box h2.win  { color: var(--accent2); }
+  .result-box h2.lose { color: var(--accent); }
+  .result-box h2.draw { color: var(--text-muted); }
+
+  .result-reason {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+  }
+
+  .advice-box {
+    background: rgba(233,69,96,0.08);
+    border: 1px solid rgba(233,69,96,0.3);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: left;
+    margin-bottom: 20px;
+  }
+
+  .advice-box .advice-label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-family: monospace;
+    margin-bottom: 8px;
+  }
+
+  .advice-box p { font-size: 13px; line-height: 1.9; }
+
+  .samuel-note {
+    font-size: 11px;
+    color: var(--text-muted);
+    border-top: 1px solid #334;
+    padding-top: 16px;
+    margin-bottom: 20px;
+    line-height: 1.8;
+    font-style: italic;
+  }
+
+  .btn-restart {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 12px 32px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: 'Noto Sans JP', sans-serif;
+    transition: opacity 0.2s;
+  }
+  .btn-restart:hover { opacity: 0.85; }
+
+  .btn-new {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid #445;
+    border-radius: 6px;
+    padding: 8px 20px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: 'Noto Sans JP', sans-serif;
+    margin-top: 8px;
+    transition: color 0.2s;
+  }
+  .btn-new:hover { color: var(--text); }
+
+  /* ──── 孔明の罠モード ──── */
+
+  /* ボード上のトグルバナー */
+  #koumei-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: var(--panel);
+    border: 1px solid #334;
+    border-radius: 8px;
+    padding: 10px 14px;
+    width: 100%;
+    max-width: 480px;
+    margin-bottom: 8px;
+  }
+
+  #koumei-bar.active {
+    border-color: #c8a400;
+    background: rgba(200,164,0,0.08);
+  }
+
+  .koumei-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-muted);
+  }
+
+  #koumei-bar.active .koumei-bar-left { color: #c8a400; }
+
+  .koumei-bar-left .k-icon { font-size: 20px; }
+
+  .toggle-switch {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+
+  .toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: #334;
+    border-radius: 24px;
+    cursor: pointer;
+    transition: background 0.25s;
+  }
+
+  .toggle-slider:before {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    left: 3px;
+    top: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.25s;
+  }
+
+  .toggle-switch input:checked + .toggle-slider { background: #c8a400; }
+  .toggle-switch input:checked + .toggle-slider:before { transform: translateX(20px); }
+
+  /* ボードを包むラッパー */
+  .board-wrap {
+    position: relative;
+    display: inline-block;
+  }
+
+  /* 孔明トグル（SCOREカード内） */
+  #koumei-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #2a3040;
+  }
+
+  #koumei-bar.active .koumei-bar-left { color: #c8a400; }
+
+  .koumei-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+  }
+
+  .koumei-bar-left .k-icon { font-size: 16px; }
+
+  .toggle-switch {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+
+  .toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: #334;
+    border-radius: 24px;
+    cursor: pointer;
+    transition: background 0.25s;
+  }
+
+  .toggle-slider:before {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    left: 3px;
+    top: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.25s;
+  }
+
+  .toggle-switch input:checked + .toggle-slider { background: #c8a400; }
+  .toggle-switch input:checked + .toggle-slider:before { transform: translateX(20px); }
+
+  /* 孔明警告バナー（SCOREカード内、トグルの下） */
+  #koumei-banner {
+    display: none;
+    margin-top: 8px;
+    padding: 7px 10px;
+    background: rgba(200,164,0,0.12);
+    border: 1px solid #c8a400;
+    border-radius: 6px;
+    font-size: 11px;
+    color: #e8c800;
+    font-family: monospace;
+    line-height: 1.8;
+  }
+  #koumei-banner.show { display: block; }
+  .btn-force-move:hover { color: #ccc; }
+  #mode-select {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(10,10,20,0.92);
+    z-index: 300;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  #mode-select.show { display: flex; }
+
+  .mode-box {
+    background: var(--panel);
+    border: 2px solid #334;
+    border-radius: 12px;
+    padding: 36px 32px;
+    max-width: 440px;
+    width: 100%;
+    text-align: center;
+  }
+
+  .mode-box h2 {
+    font-size: 20px;
+    font-weight: 900;
+    margin-bottom: 6px;
+  }
+
+  .mode-box .mode-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 28px;
+    line-height: 1.8;
+  }
+
+  .mode-buttons {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .mode-btn {
+    flex: 1;
+    min-width: 160px;
+    background: var(--bg);
+    border: 2px solid #445;
+    border-radius: 10px;
+    padding: 20px 16px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    text-align: center;
+  }
+
+  .mode-btn:hover { border-color: var(--accent); background: rgba(233,69,96,0.07); }
+
+  .mode-btn .mode-icon { font-size: 36px; margin-bottom: 10px; }
+
+  .mode-btn .mode-label {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+
+  .mode-btn .mode-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.7;
+  }
+
+  .mode-btn.first  { border-color: #29b6d8; }
+  .mode-btn.first:hover  { border-color: #29b6d8; background: rgba(41,182,216,0.1); }
+  .mode-btn.second { border-color: var(--accent); }
+  .mode-btn.second:hover { border-color: var(--accent); background: rgba(233,69,96,0.1); }
+
+  /* 後手モード時のサブタイトル変化 */
+  .mode-badge {
+    display: inline-block;
+    font-size: 10px;
+    letter-spacing: 1px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 6px;
+    vertical-align: middle;
+    font-weight: 700;
+  }
+  .mode-badge.first-badge  { background: rgba(41,182,216,0.2); color: #29b6d8; border: 1px solid #29b6d8; }
+  .mode-badge.second-badge { background: rgba(233,69,96,0.2);  color: var(--accent); border: 1px solid var(--accent); }
+
+  footer {
+    padding: 16px;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+    font-family: monospace;
+  }
+</style>
+</head>
+<body>
+
+<!-- 先手/後手選択モーダル -->
+<div id="mode-select">
+  <div class="mode-box">
+    <h2>先手 / 後手を選んでください</h2>
+    <div class="mode-sub">
+      チェッカーでは先手（上側・赤）が有利とされています。<br>
+      AIの指し手を観察するなら後手がおすすめです。
+    </div>
+    <div class="mode-buttons">
+      <button class="mode-btn first" onclick="startGame('first')">
+        <div class="mode-icon">🔵</div>
+        <div class="mode-label">先手（あなたが先）</div>
+        <div class="mode-desc">あなたが最初に動きます。<br>通常モード。</div>
+      </button>
+      <button class="mode-btn second" onclick="startGame('second')">
+        <div class="mode-icon">🔴</div>
+        <div class="mode-label">後手（AIが先）</div>
+        <div class="mode-desc">AIが先に動きます。<br>AIの戦略を観察できます。</div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<header>
+  <div class="header-eyebrow">1959 · IBM 701 · Arthur Samuel</div>
+  <h1>チェッカー <span>CHECKERS</span></h1>
+  <div class="subtitle" id="subtitle">サミュエルが機械学習を教えたゲーム ── あなたはAIに勝てますか？</div>
+</header>
+
+<div class="game-wrap">
+  <!-- ボード -->
+  <div class="board-section">
+    <div class="board-wrap">
+      <div id="board"></div>
+    </div>
+  </div>
+
+  <!-- サイドパネル -->
+  <div class="side-panel">
+    <div class="info-card">
+      <h3>SCORE</h3>
+      <div class="status-row">
+        <div class="piece-count"><span class="dot-player"></span> あなた <span id="player-count">12</span></div>
+        <div class="piece-count"><span class="dot-ai"></span> AI <span id="ai-count">12</span></div>
+      </div>
+      <!-- 孔明トグル：turn-indicatorの代わり -->
+      <div id="koumei-bar">
+        <div class="koumei-bar-left">
+          <span class="k-icon">🪖</span>孔明の罠察知
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="koumei-toggle" onchange="toggleKoumei(this)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <!-- 孔明警告バナー：トグルの直下 -->
+      <div id="koumei-banner"></div>
+    </div>
+
+    <div class="info-card">
+      <h3>LOG</h3>
+      <div class="log-box" id="log"></div>
+    </div>
+
+    <div class="rules-card">
+      <h3>RULES</h3>
+      ● 水色＝あなた　赤＝AI<br>
+      ● 駒は斜め前にだけ進める<br>
+      ● 相手を飛び越えると取れる<br>
+      ● 取れる場面は必ず取る（強制取り）<br>
+      ● 相手の端に到達で👑キング昇格<br>
+      ● キングは前後どちらにも動ける<br>
+      ● 駒ゼロまたは動けなくなったら負け
+    </div>
+  </div>
+</div>
+
+<!-- ゲームオーバーオーバーレイ -->
+<div id="overlay">
+  <div class="result-box">
+    <h2 id="result-title">あなたの負け</h2>
+    <div class="result-reason" id="result-reason"></div>
+    <div class="advice-box" id="advice-section">
+      <div class="advice-label">AIからのアドバイス</div>
+      <p id="advice-text"></p>
+    </div>
+    <div class="samuel-note" id="samuel-note"></div>
+    <button class="btn-restart" onclick="restartGame()">同じモードでもう一度</button><br>
+    <button class="btn-new" onclick="showModeSelect()">先手/後手を変える</button>
+  </div>
+</div>
+
+<footer>Inspired by Arthur Samuel's Checkers Program (1952–1959) — the program that coined "Machine Learning"</footer>
+
+<script>
+// ========================================
+// ゲームロジック
+// ========================================
+
+const EMPTY = 0, PLAYER = 1, AI = 2, PLAYER_KING = 3, AI_KING = 4;
+
+let board = [];
+let selected = null;
+let validMoves = [];
+let currentTurn = 'player';
+let gameOver = false;
+let moveHistory = { player: [], ai: [] };
+let captureCount = { player: 0, ai: 0 };
+let kingMoves = { player: 0, ai: 0 };
+
+// 引き分け判定用
+let positionHistory = [];
+let noProgressCount = 0;
+
+// 先手/後手モード
+let playerMode = 'first';
+
+// 孔明の罠察知モード
+let koumeiMode = false;
+let koumeiPendingMove = null; // 警告中の手を保留
+
+function toggleKoumei(el) {
+  koumeiMode = el.checked;
+  const bar = document.getElementById('koumei-bar');
+  if (koumeiMode) bar.classList.add('active');
+  else {
+    bar.classList.remove('active');
+    clearKoumeiBanner();
+  }
+}
+
+// チェッカー公式番号：黒マス左上から右→下の順で1〜32
+// 行0:奇数列(1,3,5,7)→1〜4、行1:偶数列(0,2,4,6)→5〜8 ... 交互
+function rcToNum(r, c) {
+  // 黒マスは(r+c)%2===1
+  if ((r + c) % 2 === 0) return null;
+  let num = 0;
+  for (let row = 0; row < r; row++) {
+    for (let col = 0; col < 8; col++) {
+      if ((row + col) % 2 === 1) num++;
+    }
+  }
+  for (let col = 0; col < c; col++) {
+    if ((r + col) % 2 === 1) num++;
+  }
+  return num + 1;
+}
+
+function detectKoumeiTrap(move) {
+  const nextBoard = applyMove(board, move);
+  const aiCaps = getAllCaptures(nextBoard, 'ai');
+  let maxCaptures = 0;
+  for (const cap of aiCaps) {
+    let count = 1;
+    let simB = applyMove(nextBoard, cap);
+    let pos = cap.to;
+    for (let i = 0; i < 10; i++) {
+      const chain = getCaptures(simB, pos[0], pos[1]);
+      if (chain.length === 0) break;
+      simB = applyMove(simB, chain[0]);
+      pos = chain[0].to;
+      count++;
+    }
+    maxCaptures = Math.max(maxCaptures, count);
+  }
+  return maxCaptures;
+}
+
+function clearKoumeiBanner() {
+  const b = document.getElementById('koumei-banner');
+  b.textContent = '';
+  b.classList.remove('show');
+}
+
+// 死亡宣告メッセージ（強制取りで取るしかないが連続取りされる場合）
+const DOOMED_MSGS = [
+  'お前はもう死んでいる…',
+  '他に選択肢はない。やるしかない。',
+  '逃げ場なし。覚悟を決めろ。',
+  '孔明、すでに罠を張り終えている。',
+  '取るしかないが、その先に地獄が待つ。',
+  '運命は決まった。せめて華々しく散れ。',
+];
+
+function updateKoumeiBanner(fromR, fromC, moves) {
+  if (!koumeiMode || !selected) { clearKoumeiBanner(); return; }
+
+  const trapMoves   = []; // 通常移動で罠になる手
+  const doomedMoves = []; // 強制取りだが取った後に連続取りされる手
+
+  for (const m of moves) {
+    if (m.cap) {
+      // 強制取り：取った後にAIがさらに連続取りできるか調べる
+      const afterBoard = applyMove(board, m);
+      // 取った後にプレイヤーの連続取りがない場合のみ（連続取り中は別途チェック）
+      const playerChain = getCaptures(afterBoard, m.to[0], m.to[1]);
+      if (playerChain.length === 0) {
+        // AIが連続取りできる枚数を計算
+        const aiCaps = getAllCaptures(afterBoard, 'ai');
+        let maxAI = 0;
+        for (const ac of aiCaps) {
+          let cnt = 1, simB = applyMove(afterBoard, ac), pos = ac.to;
+          for (let i = 0; i < 10; i++) {
+            const ch = getCaptures(simB, pos[0], pos[1]);
+            if (ch.length === 0) break;
+            simB = applyMove(simB, ch[0]); pos = ch[0].to; cnt++;
+          }
+          maxAI = Math.max(maxAI, cnt);
+        }
+        if (maxAI >= 2) {
+          const fromNum = rcToNum(m.from[0], m.from[1]);
+          const toNum   = rcToNum(m.to[0],   m.to[1]);
+          doomedMoves.push({ fromNum, toNum, count: maxAI });
+        }
+      }
+    } else {
+      // 通常移動：罠チェック
+      const count = detectKoumeiTrap(m);
+      if (count >= 2) {
+        const fromNum = rcToNum(m.from[0], m.from[1]);
+        const toNum   = rcToNum(m.to[0],   m.to[1]);
+        trapMoves.push({ fromNum, toNum, count });
+      }
+    }
+  }
+
+  const banner = document.getElementById('koumei-banner');
+  const lines = [];
+
+  if (doomedMoves.length > 0) {
+    // 死亡宣告：ランダムメッセージ
+    const msg = DOOMED_MSGS[Math.floor(Math.random() * DOOMED_MSGS.length)];
+    lines.push(`💀 ${msg}`);
+    doomedMoves.forEach(d =>
+      lines.push(`　${d.fromNum}→${d.toNum} で取るしかないが、その後${d.count}枚取りされる`)
+    );
+  }
+
+  trapMoves.forEach(t =>
+    lines.push(`🪖 ${t.fromNum}→${t.toNum} は罠！ ${t.count}枚取りされます`)
+  );
+
+  if (lines.length === 0) {
+    clearKoumeiBanner();
+  } else {
+    banner.innerHTML = lines.join('<br>');
+    banner.classList.add('show');
+  }
+}
+
+function koumeiCancel() {}  // バナー方式では不要（残骸を残しておく）
+function koumeiForce()  {}  // 同上
+
+function showModeSelect() {
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('mode-select').classList.add('show');
+}
+
+function startGame(mode) {
+  playerMode = mode;
+  document.getElementById('mode-select').classList.remove('show');
+
+  const sub = document.getElementById('subtitle');
+  if (mode === 'first') {
+    sub.innerHTML = 'サミュエルが機械学習を教えたゲーム ── あなたはAIに勝てますか？ <span class="mode-badge first-badge">先手</span>';
+  } else {
+    sub.innerHTML = 'サミュエルが機械学習を教えたゲーム ── AIの戦略を観察しよう <span class="mode-badge second-badge">後手</span>';
+  }
+
+  resetGameState();
+  renderBoard();
+
+  if (mode === 'second') {
+    currentTurn = 'ai';
+    setTurnUI('ai');
+    log('後手モード：AIが先手です');
+    setTimeout(doAIMove, 800);
+  } else {
+    setTurnUI('player');
+    log('先手モード：あなたが先手です');
+  }
+}
+
+function resetGameState() {
+  document.getElementById('log').innerHTML = '';
+  stopMustBlink();
+  selected = null; validMoves = [];
+  currentTurn = 'player';
+  gameOver = false;
+  captureCount = { player: 0, ai: 0 };
+  kingMoves = { player: 0, ai: 0 };
+  moveHistory = { player: [], ai: [] };
+  positionHistory = [];
+  noProgressCount = 0;
+  initBoard();
+}
+
+function initBoard() {
+  board = Array(8).fill(null).map(() => Array(8).fill(EMPTY));
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 8; c++) {
+      if ((r + c) % 2 === 1) board[r][c] = AI;
+    }
+  }
+  for (let r = 5; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      if ((r + c) % 2 === 1) board[r][c] = PLAYER;
+    }
+  }
+}
+
+function isPlayerPiece(v) { return v === PLAYER || v === PLAYER_KING; }
+function isAIPiece(v)     { return v === AI    || v === AI_KING; }
+function isKing(v)        { return v === PLAYER_KING || v === AI_KING; }
+
+function getCaptures(b, r, c) {
+  const v = b[r][c];
+  const dirs = [];
+  if (isPlayerPiece(v)) dirs.push([-1,-1],[-1,1]);
+  if (isAIPiece(v))     dirs.push([1,-1],[1,1]);
+  if (isKing(v))        dirs.push([-1,-1],[-1,1],[1,-1],[1,1]);
+  const caps = [];
+  const isEnemy = isPlayerPiece(v)
+    ? (x) => isAIPiece(x)
+    : (x) => isPlayerPiece(x);
+  for (const [dr,dc] of dirs) {
+    const mr = r+dr, mc = c+dc;
+    const lr = r+2*dr, lc = c+2*dc;
+    if (lr>=0&&lr<8&&lc>=0&&lc<8 && isEnemy(b[mr][mc]) && b[lr][lc]===EMPTY) {
+      caps.push({from:[r,c],to:[lr,lc],cap:[mr,mc]});
+    }
+  }
+  return caps;
+}
+
+function getAllCaptures(b, side) {
+  const caps = [];
+  for (let r=0;r<8;r++) for (let c=0;c<8;c++) {
+    const v = b[r][c];
+    if ((side==='player' && isPlayerPiece(v)) || (side==='ai' && isAIPiece(v))) {
+      caps.push(...getCaptures(b,r,c));
+    }
+  }
+  return caps;
+}
+
+function getMoves(b, r, c) {
+  const v = b[r][c];
+  const dirs = [];
+  if (isPlayerPiece(v)) dirs.push([-1,-1],[-1,1]);
+  if (isAIPiece(v))     dirs.push([1,-1],[1,1]);
+  if (isKing(v))        dirs.push([-1,-1],[-1,1],[1,-1],[1,1]);
+  const moves = [];
+  for (const [dr,dc] of dirs) {
+    const nr=r+dr, nc=c+dc;
+    if (nr>=0&&nr<8&&nc>=0&&nc<8 && b[nr][nc]===EMPTY) {
+      moves.push({from:[r,c],to:[nr,nc],cap:null});
+    }
+  }
+  return moves;
+}
+
+function getAllMoves(b, side) {
+  const caps = getAllCaptures(b, side);
+  if (caps.length > 0) return caps;
+  const moves = [];
+  for (let r=0;r<8;r++) for (let c=0;c<8;c++) {
+    const v = b[r][c];
+    if ((side==='player' && isPlayerPiece(v)) || (side==='ai' && isAIPiece(v))) {
+      moves.push(...getMoves(b,r,c));
+    }
+  }
+  return moves;
+}
+
+function applyMove(b, move) {
+  const nb = b.map(row => [...row]);
+  const [fr,fc] = move.from, [tr,tc] = move.to;
+  nb[tr][tc] = nb[fr][fc];
+  nb[fr][fc] = EMPTY;
+  if (move.cap) nb[move.cap[0]][move.cap[1]] = EMPTY;
+  // キング昇格
+  if (nb[tr][tc] === PLAYER && tr === 0) nb[tr][tc] = PLAYER_KING;
+  if (nb[tr][tc] === AI     && tr === 7) nb[tr][tc] = AI_KING;
+  return nb;
+}
+
+function countPieces(b) {
+  let p=0,a=0;
+  for (let r=0;r<8;r++) for (let c=0;c<8;c++) {
+    if (isPlayerPiece(b[r][c])) p++;
+    if (isAIPiece(b[r][c])) a++;
+  }
+  return {p,a};
+}
+
+// ──── 局面ハッシュ（引き分け判定用） ────
+function boardHash(b) {
+  return b.map(row => row.join('')).join('|');
+}
+
+function recordPosition(wasCapture, wasPromotion) {
+  if (wasCapture || wasPromotion) {
+    // 取りかキング昇格があればリセット
+    positionHistory = [];
+    noProgressCount = 0;
+  } else {
+    noProgressCount++;
+  }
+  positionHistory.push(boardHash(board));
+}
+
+function checkDraw() {
+  // ① 40手無進捗（取りもキング昇格もなし）
+  if (noProgressCount >= 40) return '40手以上、駒取りもキング昇格もない状態が続きました';
+  // ② 同一局面3回
+  const last = positionHistory[positionHistory.length - 1];
+  const count = positionHistory.filter(h => h === last).length;
+  if (count >= 3) return '同じ局面が3回繰り返されました';
+  return null;
+}
+
+// ──── AIロジック (minimax + alpha-beta) ────
+function evaluate(b) {
+  let score = 0;
+  for (let r=0;r<8;r++) for (let c=0;c<8;c++) {
+    const v = b[r][c];
+    if (v === AI) {
+      score += 100;
+      score += r * 4;                          // 前進ボーナス
+      if (c > 0 && c < 7) score += 8;         // 中央ボーナス（端ペナルティの逆）
+      if (c === 0 || c === 7) score -= 12;     // 端ペナルティ（逃げ込み抑制）
+    } else if (v === AI_KING) {
+      score += 160;
+      if (c === 0 || c === 7) score -= 20;     // キングも端に逃げるのを抑制
+      // 中央4列にいるとボーナス
+      if (c >= 2 && c <= 5) score += 15;
+    } else if (v === PLAYER) {
+      score -= 100;
+      score -= (7 - r) * 4;
+      if (c > 0 && c < 7) score -= 8;
+      if (c === 0 || c === 7) score += 12;
+    } else if (v === PLAYER_KING) {
+      score -= 160;
+      if (c === 0 || c === 7) score += 20;
+      if (c >= 2 && c <= 5) score -= 15;
+    }
+  }
+  // モビリティ評価（動ける手の数）
+  const aiMoves    = getAllMoves(b, 'ai').length;
+  const playerMoves = getAllMoves(b, 'player').length;
+  score += (aiMoves - playerMoves) * 3;
+  return score;
+}
+
+function minimax(b, depth, alpha, beta, maximizing) {
+  const side = maximizing ? 'ai' : 'player';
+  const moves = getAllMoves(b, side);
+  if (depth === 0 || moves.length === 0) return evaluate(b);
+  if (maximizing) {
+    let best = -Infinity;
+    for (const m of moves) {
+      const nb = applyMove(b, m);
+      // 連続取りチェック
+      let val;
+      if (m.cap) {
+        const extra = getCaptures(nb, m.to[0], m.to[1]);
+        if (extra.length > 0) val = minimax(nb, depth, alpha, beta, true);
+        else val = minimax(nb, depth-1, alpha, beta, false);
+      } else {
+        val = minimax(nb, depth-1, alpha, beta, false);
+      }
+      best = Math.max(best, val);
+      alpha = Math.max(alpha, best);
+      if (beta <= alpha) break;
+    }
+    return best;
+  } else {
+    let best = Infinity;
+    for (const m of moves) {
+      const nb = applyMove(b, m);
+      let val;
+      if (m.cap) {
+        const extra = getCaptures(nb, m.to[0], m.to[1]);
+        if (extra.length > 0) val = minimax(nb, depth, alpha, beta, false);
+        else val = minimax(nb, depth-1, alpha, beta, true);
+      } else {
+        val = minimax(nb, depth-1, alpha, beta, true);
+      }
+      best = Math.min(best, val);
+      beta = Math.min(beta, best);
+      if (beta <= alpha) break;
+    }
+    return best;
+  }
+}
+
+function getBestAIMove() {
+  const moves = getAllMoves(board, 'ai');
+  let best = -Infinity, bestMove = null;
+  for (const m of moves) {
+    const nb = applyMove(board, m);
+    const val = minimax(nb, 5, -Infinity, Infinity, false);
+    if (val > best) { best = val; bestMove = m; }
+  }
+  return bestMove;
+}
+
+// ──── 描画 ────
+function renderBoard(aiHighlight) {
+  const el = document.getElementById('board');
+  el.innerHTML = '';
+
+  // 強制取りがある駒のリストを事前計算（プレイヤーターンのみ）
+  const forcedCaps = (currentTurn === 'player') ? getAllCaptures(board,'player') : [];
+  const mustFromKeys = new Set(forcedCaps.map(m => m.from[0]+','+m.from[1]));
+
+  for (let r=0;r<8;r++) for (let c=0;c<8;c++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell ' + ((r+c)%2===0?'light':'dark');
+    cell.dataset.r = r; cell.dataset.c = c;
+
+    // AIアニメ用ハイライト
+    if (aiHighlight) {
+      if (aiHighlight.from && aiHighlight.from[0]===r && aiHighlight.from[1]===c) cell.classList.add('ai-from');
+      if (aiHighlight.to   && aiHighlight.to[0]===r   && aiHighlight.to[1]===c)   cell.classList.add('ai-to');
+      if (aiHighlight.cap  && aiHighlight.cap[0]===r   && aiHighlight.cap[1]===c)  cell.classList.add('ai-cap');
+    }
+
+    // プレイヤー移動先ハイライト
+    if (selected) {
+      const [sr,sc] = selected;
+      if (!(r===sr&&c===sc)) {
+        const move = validMoves.find(m=>m.to[0]===r&&m.to[1]===c);
+        if (move) {
+          if (move.cap) {
+            cell.classList.add('capture-hint');
+          } else {
+            // 孔明モードON時は罠の移動先を別色に
+            if (koumeiMode && detectKoumeiTrap(move) >= 2) {
+              cell.classList.add('trap-dest');
+            } else {
+              cell.classList.add('highlight');
+            }
+          }
+        }
+      }
+    }
+
+    // 黒マスに番号表示
+    if ((r + c) % 2 === 1) {
+      const num = document.createElement('span');
+      num.className = 'cell-num';
+      num.textContent = rcToNum(r, c);
+      cell.appendChild(num);
+    }
+
+    if (board[r][c] !== EMPTY) {
+      const piece = document.createElement('div');
+      const v = board[r][c];
+      piece.className = 'piece ' + (isPlayerPiece(v)?'player':'ai');
+      // キングはクラスとテキスト両方
+      if (isKing(v)) {
+        piece.classList.add('king-piece');
+        piece.textContent = '♛';
+      }
+
+      // 選択中
+      if (selected && selected[0]===r && selected[1]===c) {
+        piece.classList.add('selected');
+      }
+      // 強制取り強調：動かせる駒→JSで点滅、動かせない自駒→cannot-move
+      else if (isPlayerPiece(v) && forcedCaps.length > 0 && currentTurn==='player' && !selected) {
+        if (mustFromKeys.has(r+','+c)) {
+          piece.dataset.mustBlink = '1';
+          cell.dataset.mustCell = '1';
+        } else {
+          piece.classList.add('cannot-move');
+        }
+      }
+
+      cell.appendChild(piece);
+    }
+
+    cell.addEventListener('click', onCellClick);
+    el.appendChild(cell);
+  }
+  const {p,a} = countPieces(board);
+  document.getElementById('player-count').textContent = p;
+  document.getElementById('ai-count').textContent = a;
+  startMustBlink();
+}
+
+// ──── 強制取り色付け（タイマーなし・直接style） ────
+let mustBlinkTimer = null;
+function stopMustBlink() {
+  if (mustBlinkTimer) { clearInterval(mustBlinkTimer); mustBlinkTimer = null; }
+}
+function startMustBlink() {
+  stopMustBlink();
+  // renderBoard内で data-must-blink を付けた駒に直接styleを適用
+  document.querySelectorAll('[data-must-blink]').forEach(p => {
+    p.style.background = 'radial-gradient(circle at 30% 28%, #ffffff, #ffe100, #ff6a00)';
+    p.style.border     = '4px solid #ff2200';
+    p.style.transform  = 'scale(1.1)';
+    p.style.boxShadow  = '0 0 0 3px #ff2200, 0 0 0 6px #ffaa00';
+  });
+  document.querySelectorAll('[data-must-cell]').forEach(c => {
+    c.style.background = '#cc5500';
+  });
+}
+
+function log(msg) {
+  const box = document.getElementById('log');
+  const line = document.createElement('div');
+  line.textContent = msg;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+// ──── クリックハンドラ ────
+function onCellClick(e) {
+  if (currentTurn !== 'player' || gameOver) return;
+  const r = parseInt(e.currentTarget.dataset.r);
+  const c = parseInt(e.currentTarget.dataset.c);
+  const v = board[r][c];
+
+  if (selected) {
+    const move = validMoves.find(m=>m.to[0]===r&&m.to[1]===c);
+    if (move) {
+      clearKoumeiBanner();
+      executePlayerMove(move);
+      return;
+    }
+    if (isPlayerPiece(v)) { selectPiece(r,c); return; }
+    selected = null; validMoves = [];
+    clearKoumeiBanner();
+    renderBoard();
+    return;
+  }
+
+  if (isPlayerPiece(v)) selectPiece(r,c);
+}
+
+function selectPiece(r,c) {
+  const forcedCaps = getAllCaptures(board,'player');
+  if (forcedCaps.length > 0) {
+    const myCaps = getCaptures(board,r,c);
+    if (myCaps.length === 0) {
+      // 動かせる駒を視覚的に示してトースト
+      showToast('⚠ 光っている駒で\n取らなければなりません！');
+      return;
+    }
+    selected = [r,c]; validMoves = myCaps;
+  } else {
+    const moves = getMoves(board,r,c);
+    if (moves.length === 0) { showToast('この駒は動けません'); return; }
+    selected = [r,c]; validMoves = moves;
+  }
+  renderBoard();
+  updateKoumeiBanner(r, c, validMoves);
+}
+
+
+function executePlayerMove(move, isChain=false) {
+  const wasKing = isKing(board[move.from[0]][move.from[1]]);
+  board = applyMove(board, move);
+  const promoted = !wasKing && isKing(board[move.to[0]][move.to[1]]);
+  if (move.cap) {
+    captureCount.player++;
+    log('▶ あなたが取った！');
+  }
+  if (promoted) { kingMoves.player++; log('👑 キング昇格！'); }
+
+  // 連続取り中はまだrecordPositionしない
+  const extra = move.cap ? getCaptures(board, move.to[0], move.to[1]) : [];
+  if (extra.length > 0) {
+    selected = move.to; validMoves = extra;
+    renderBoard();
+    setTurnUI('player', true);
+    log('♻ 続けて取れます');
+    return;
+  }
+
+  // 1手完了時点で局面記録
+  recordPosition(!!move.cap, promoted);
+
+  selected = null; validMoves = [];
+  renderBoard();
+  moveHistory.player.push(move);
+
+  if (checkGameOver()) return;
+  currentTurn = 'ai';
+  setTurnUI('ai');
+  setTimeout(doAIMove, 600);
+}
+
+function setTurnUI(turn, chain=false) {
+  // turn-indicatorは廃止。AIターン中はクリック無効で十分。
+}
+
+function doAIMove() {
+  const move = getBestAIMove();
+  if (!move) { endGame('player','AIが動けなくなりました'); return; }
+
+  // AI連続取り手順を事前計算（取りの手のときだけ）
+  const steps = [move];
+  if (move.cap) {  // ← 取りの手のときだけ連続取りを計算
+    let simBoard = applyMove(board, move);
+    let pos = move.to;
+    for (let i=0; i<10; i++) {
+      const extra = getCaptures(simBoard, pos[0], pos[1]);
+      if (extra.length === 0) break;
+      const next = extra[0];
+      steps.push(next);
+      simBoard = applyMove(simBoard, next);
+      pos = next.to;
+    }
+  }
+
+  let stepIdx = 0;
+  function playStep() {
+    const s = steps[stepIdx];
+    const wasKing = isKing(board[s.from[0]][s.from[1]]);
+    board = applyMove(board, s);
+    if (s.cap) { captureCount.ai++; log('◀ AIが取った…'); }
+    const nowKing = isKing(board[s.to[0]][s.to[1]]);
+    if (!wasKing && nowKing) { kingMoves.ai++; log('👑 AIがキング昇格'); }
+
+    renderBoard({ from: s.from, to: s.to, cap: s.cap || null });
+
+    stepIdx++;
+    if (stepIdx < steps.length) {
+      setTurnUI('ai', true);
+      setTimeout(playStep, 500);
+    } else {
+      // 全手終了
+      const anyCapture = steps.some(s => s.cap);
+      const anyPromotion = steps.some(s => isKing(board[s.to[0]][s.to[1]]));
+      recordPosition(anyCapture, anyPromotion);
+      moveHistory.ai.push(move);
+      setTimeout(() => {
+        // ① currentTurnをplayerに切り替えてから
+        currentTurn = 'player';
+        // ② renderBoard（ここで初めてmust-move判定が走る）
+        renderBoard();
+        if (checkGameOver()) return;
+        // ③ ターン表示を更新
+        setTurnUI('player');
+      }, 400);
+    }
+  }
+
+  playStep();
+}
+
+function checkGameOver() {
+  const {p,a} = countPieces(board);
+  if (a === 0) { endGame('player','AIの駒がなくなりました'); return true; }
+  if (p === 0) { endGame('ai','あなたの駒がなくなりました'); return true; }
+  if (getAllMoves(board,'player').length === 0) { endGame('ai','動ける場所がありません'); return true; }
+  if (getAllMoves(board,'ai').length === 0) { endGame('player','AIが動けなくなりました'); return true; }
+  const drawReason = checkDraw();
+  if (drawReason) { endGame('draw', drawReason); return true; }
+  return false;
+}
+
+// ──── 敗因分析 & アドバイス ────
+const ADVICE_TEMPLATES = [
+  {
+    cond: (h,cap,km) => cap.ai >= 5 && cap.player <= 2,
+    msg: `駒をたくさん取られてしまいました。序盤から積極的に相手の駒を取りに行き、取られそうな駒は逃がすか連鎖取りに備えるポジションにおきましょう。`,
+    samuel: `サミュエルのプログラムは「駒の差」を最も重要な評価基準にしていました。1枚の差が後半で大きく響きます。`
+  },
+  {
+    cond: (h,cap,km) => km.ai >= 2 && km.player === 0,
+    msg: `AIにキングを作られてしまいました。キングは前後どちらにも動けるため非常に強力です。相手の駒が端の列（成り列）に近づいたら優先して止めましょう。`,
+    samuel: `サミュエルのAIはキングの価値を通常の駒より60%高く評価していました。キング昇格を防ぐことが戦略の鍵です。`
+  },
+  {
+    cond: (h,cap,km) => cap.ai > cap.player && h.player.length > 20,
+    msg: `終盤で駒交換に負け越しました。交換するときは「自分が有利な交換かどうか」を確認しましょう。キング同士の交換は避けるのが基本です。`,
+    samuel: `サミュエルのプログラムが発見した「駒交換の評価」——局面によって同じ交換でも有利・不利が変わります。これが機械学習で改善された部分のひとつです。`
+  },
+  {
+    cond: (h,cap,km) => h.player.length < 8,
+    msg: `動ける回数が少なかったです。序盤から盤面の中央付近に駒を展開し、選択肢を増やしておくと終盤に強くなります。`,
+    samuel: `チェッカーは「手の広さ」が重要です。サミュエルのAIは選べる手の数（モビリティ）を評価関数に組み込みました。`
+  },
+  {
+    cond: () => true,  // デフォルト
+    msg: `AIに攻め込まれてしまいました。盤面の左右のバランスを保ちながら進め、孤立した駒が生まれないように注意しましょう。`,
+    samuel: `アーサー・サミュエルは1952年からIBM 701でこのゲームを学習させました。1962年にはアマチュアチャンピオンを破るまでに成長。「Machine Learning」という言葉はサミュエルが作った造語です。`
+  }
+];
+
+function getAdvice() {
+  for (const t of ADVICE_TEMPLATES) {
+    if (t.cond(moveHistory, captureCount, kingMoves)) return t;
+  }
+  return ADVICE_TEMPLATES[ADVICE_TEMPLATES.length - 1];
+}
+
+function endGame(winner, reason) {
+  gameOver = true;
+  renderBoard();
+  const overlay = document.getElementById('overlay');
+  const title = document.getElementById('result-title');
+  const reasonEl = document.getElementById('result-reason');
+  const adviceEl = document.getElementById('advice-text');
+  const samuelEl = document.getElementById('samuel-note');
+  const adviceSection = document.getElementById('advice-section');
+
+  overlay.classList.add('show');
+
+  if (winner === 'draw') {
+    title.textContent = '🤝 引き分け';
+    title.className = 'draw';
+    reasonEl.textContent = reason;
+    adviceSection.style.display = 'none';
+    samuelEl.textContent = `チェッカーは完全解析済みのゲームで、両者が最善を尽くせば必ず引き分けになります。サミュエルのプログラムもこの「引き分けの壁」と戦い続けました。`;
+  } else if (winner === 'player') {
+    title.textContent = '🎉 あなたの勝ち！';
+    title.className = 'win';
+    reasonEl.textContent = reason;
+    adviceSection.style.display = 'none';
+    samuelEl.textContent = `サミュエルのプログラムも最初は弱かった。1952年の初期バージョンは素人にも負けていました。でも「自己対戦」を繰り返すことで強くなっていった。これが機械学習の原点です。`;
+  } else {
+    title.textContent = '😓 AIの勝ち';
+    title.className = 'lose';
+    reasonEl.textContent = reason;
+    adviceSection.style.display = 'block';
+    const { msg, samuel } = getAdvice();
+    adviceEl.textContent = msg;
+    samuelEl.textContent = `📖 サミュエルのプログラムより：${samuel}`;
+  }
+}
+
+function restartGame() {
+  document.getElementById('overlay').classList.remove('show');
+  resetGameState();
+  renderBoard();
+
+  if (playerMode === 'second') {
+    currentTurn = 'ai';
+    setTurnUI('ai');
+    log('後手モード：AIが先手です');
+    setTimeout(doAIMove, 800);
+  } else {
+    setTurnUI('player');
+    log('先手モード：あなたが先手です');
+  }
+}
+
+// ──── 起動：モーダルを表示して待機 ────
+(function init() {
+  initBoard();
+  renderBoard();
+  document.getElementById('mode-select').classList.add('show');
+})();
+</script>
+</body>
+</html>
