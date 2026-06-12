@@ -1392,13 +1392,18 @@ function doAIMove() {
   }
 
   let stepIdx = 0;
+  let anyPromotionFlag = false;
   function playStep() {
     const s = steps[stepIdx];
     const wasKing = isKing(board[s.from[0]][s.from[1]]);
     board = applyMove(board, s);
     if (s.cap) { captureCount.ai++; log('◀ AIが取った…'); }
     const nowKing = isKing(board[s.to[0]][s.to[1]]);
-    if (!wasKing && nowKing) { kingMoves.ai++; log('👑 AIがキング昇格'); }
+    if (!wasKing && nowKing) {
+      kingMoves.ai++;
+      log('👑 AIがキング昇格');
+      anyPromotionFlag = true; // 実際に昇格した手のみフラグを立てる
+    }
 
     renderBoard({ from: s.from, to: s.to, cap: s.cap || null });
 
@@ -1409,8 +1414,7 @@ function doAIMove() {
     } else {
       // 全手終了
       const anyCapture = steps.some(s => s.cap);
-      const anyPromotion = steps.some(s => isKing(board[s.to[0]][s.to[1]]));
-      recordPosition(anyCapture, anyPromotion);
+      recordPosition(anyCapture, anyPromotionFlag);
       moveHistory.ai.push(move);
       setTimeout(() => {
         // ① currentTurnをplayerに切り替えてから
