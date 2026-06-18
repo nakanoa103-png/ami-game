@@ -4,9 +4,10 @@ const LOGI_W = 320, LOGI_H = 240, SCALE = 2;
 
 let canvas, ctx, logi, lctx;
 let tilemap, player, wave;
-let keys   = {};
-let state  = 'playing';   // 'playing' | 'paused' | 'gameover'
-let lastTs = 0;
+let keys         = {};
+let state        = 'playing';   // 'playing' | 'paused' | 'gameover'
+let lastTs       = 0;
+let isTouchDevice = false;
 
 // ─── 初期化 ──────────────────────────────────────────────────────────────────
 
@@ -48,7 +49,7 @@ function init() {
     assets.load('sword',     'assets/images/sword.png',     '#FFFFFF');
 
     _resetGame();
-    initTouchControls();
+    isTouchDevice = initTouchControls();
 
     // ゲームオーバー中のタップでリトライ
     canvas.addEventListener('touchstart', e => {
@@ -59,7 +60,7 @@ function init() {
 }
 
 function initTouchControls() {
-    if (!('ontouchstart' in window)) return;
+    if (!('ontouchstart' in window)) return false;
 
     // タッチ端末ならボタンを表示
     document.getElementById('touch-ui').style.display = 'flex';
@@ -93,6 +94,7 @@ function initTouchControls() {
     }, { passive: false });
     pauseBtn.addEventListener('touchend',    e => { e.preventDefault(); pauseDown = false; }, { passive: false });
     pauseBtn.addEventListener('touchcancel', e => { e.preventDefault(); pauseDown = false; }, { passive: false });
+    return true;
 }
 
 function _resetGame() {
@@ -124,6 +126,10 @@ function loop(ts) {
 
 function update() {
     player.handleInput(keys);
+    // スマホのみ自動攻撃（PCはSpaceキーで手動）
+    if (isTouchDevice && player.attackTimer === 0) {
+        keys['Space'] = true;
+    }
     player.update();
     wave.update(player);
 
