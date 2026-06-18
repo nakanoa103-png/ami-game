@@ -25,6 +25,7 @@ class Player {
         this.hpMax = S.PLAYER_HP;
 
         this.invincible  = 0;
+        this.stunTimer   = 0;
         this.attackTimer = 0;
         this.attackRect  = null;
 
@@ -39,6 +40,7 @@ class Player {
     get isDead()       { return this.hp <= 0; }
 
     handleInput(keys) {
+        if (this.stunTimer > 0) return;   // 被弾直後は操作無効
         const spd = this.moveSpeed;
         let dx = 0, dy = 0;
         if (keys['ArrowLeft']  || keys['KeyA']) dx -= spd;
@@ -66,6 +68,7 @@ class Player {
     }
 
     update() {
+        if (this.stunTimer > 0) this.stunTimer--;
         if (this.attackTimer > 0) {
             this.attackTimer--;
             this.attackRect = this._makeAttackRect();
@@ -108,12 +111,14 @@ class Player {
         if (this.armorCharges > 0) {
             this.armorCharges--;
             this.invincible = S.INVINCIBLE_TIME;
-            if (fromDir) this.knockback(fromDir, 12);
+            this.stunTimer   = 20;
+            if (fromDir) this.knockback(fromDir, 14);
             return;
         }
         this.hp -= amount;
         this.invincible = S.INVINCIBLE_TIME;
-        if (fromDir) this.knockback(fromDir, 12);
+        this.stunTimer   = 20;
+        if (fromDir) this.knockback(fromDir, 14);
     }
 
     draw(ctx) {
