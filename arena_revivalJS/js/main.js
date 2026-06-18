@@ -62,9 +62,7 @@ function init() {
 function initTouchControls() {
     if (!('ontouchstart' in window)) return false;
 
-    // タッチ端末ならボタンを表示（攻撃は自動なので攻撃ボタンは非表示）
     document.getElementById('touch-ui').style.display = 'flex';
-    document.getElementById('attack-btn').style.display = 'none';
     document.getElementById('hint').style.display = 'none';
 
     // 移動ボタン（押している間だけ有効）
