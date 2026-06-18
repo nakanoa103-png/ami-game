@@ -68,7 +68,7 @@
 
         #dpad {
             display: grid;
-            grid-template-areas: ". up ." "left . right" ". down .";
+            grid-template-areas: ". up ." "left atk right" ". down .";
             gap: 4px;
             pointer-events: all;
         }
@@ -86,10 +86,17 @@
         }
         .dpad-btn:active { background: rgba(255,255,255,0.4); }
 
-        #dpad-up    { grid-area: up; }
-        #dpad-left  { grid-area: left; }
-        #dpad-right { grid-area: right; }
-        #dpad-down  { grid-area: down; }
+        #dpad-up     { grid-area: up; }
+        #dpad-left   { grid-area: left; }
+        #dpad-right  { grid-area: right; }
+        #dpad-down   { grid-area: down; }
+        #dpad-attack {
+            grid-area: atk;
+            background: rgba(200,80,80,0.7);
+            border-color: rgba(255,120,120,0.9);
+            font-size: 20px;
+        }
+        #dpad-attack:active { background: rgba(220,50,50,0.95); }
 
         #right-cluster {
             display: flex;
@@ -133,12 +140,12 @@
         <div id="dpad">
             <button class="dpad-btn" id="dpad-up">▲</button>
             <button class="dpad-btn" id="dpad-left">◀</button>
+            <button class="dpad-btn" id="dpad-attack">⚔</button>
             <button class="dpad-btn" id="dpad-right">▶</button>
             <button class="dpad-btn" id="dpad-down">▼</button>
         </div>
         <div id="right-cluster">
             <button id="pause-btn">❚❚</button>
-            <button id="attack-btn">⚔</button>
         </div>
     </div>
 
