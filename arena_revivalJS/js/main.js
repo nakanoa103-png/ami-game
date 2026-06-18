@@ -68,11 +68,11 @@ function initTouchControls() {
     document.getElementById('hint').style.display = 'none';
 
     const btnMap = {
-        'dpad-up':    'ArrowUp',
-        'dpad-down':  'ArrowDown',
-        'dpad-left':  'ArrowLeft',
-        'dpad-right': 'ArrowRight',
-        'attack-btn': 'Space',
+        'dpad-up':     'ArrowUp',
+        'dpad-down':   'ArrowDown',
+        'dpad-left':   'ArrowLeft',
+        'dpad-right':  'ArrowRight',
+        'dpad-attack': 'Space',
     };
 
     for (const [id, code] of Object.entries(btnMap)) {
@@ -131,11 +131,7 @@ function loop(ts) {
 
 function update() {
     player.handleInput(keys);
-    if (isTouchDevice) {
-        autoAim();
-        // スタン中でも攻撃は継続（移動だけ止まる）
-        if (player.attackTimer === 0) player.attackTimer = S.ATTACK_DURATION;
-    }
+    if (isTouchDevice) autoAim();
     player.update();
     wave.update(player);
 
