@@ -4,9 +4,10 @@ const LOGI_W = 320, LOGI_H = 240, SCALE = 2;
 
 let canvas, ctx, logi, lctx;
 let tilemap, player, wave;
-let keys   = {};
-let state  = 'playing';   // 'playing' | 'paused' | 'gameover'
-let lastTs = 0;
+let keys         = {};
+let state        = 'playing';   // 'playing' | 'paused' | 'gameover'
+let lastTs       = 0;
+let isTouchDevice = false;
 
 // ─── 初期化 ──────────────────────────────────────────────────────────────────
 
@@ -48,7 +49,53 @@ function init() {
     assets.load('sword',     'assets/images/sword.png',     '#FFFFFF');
 
     _resetGame();
+    isTouchDevice = initTouchControls();
+
+    // ゲームオーバー中のタップでリトライ
+    canvas.addEventListener('touchstart', e => {
+        if (state === 'gameover') { e.preventDefault(); _resetGame(); }
+    }, { passive: false });
+
     requestAnimationFrame(loop);
+}
+
+function initTouchControls() {
+    if (!('ontouchstart' in window)) return false;
+
+    // タッチ端末ならボタンを表示（攻撃は自動なので攻撃ボタンは非表示）
+    document.getElementById('touch-ui').style.display = 'flex';
+    document.getElementById('attack-btn').style.display = 'none';
+    document.getElementById('hint').style.display = 'none';
+
+    const btnMap = {
+        'dpad-up':    'ArrowUp',
+        'dpad-down':  'ArrowDown',
+        'dpad-left':  'ArrowLeft',
+        'dpad-right': 'ArrowRight',
+        'attack-btn': 'Space',
+    };
+
+    for (const [id, code] of Object.entries(btnMap)) {
+        const btn = document.getElementById(id);
+        btn.addEventListener('touchstart',  e => { e.preventDefault(); keys[code] = true;  }, { passive: false });
+        btn.addEventListener('touchend',    e => { e.preventDefault(); keys[code] = false; }, { passive: false });
+        btn.addEventListener('touchcancel', e => { e.preventDefault(); keys[code] = false; }, { passive: false });
+    }
+
+    // ポーズボタン（トグル、リピートなし）
+    let pauseDown = false;
+    const pauseBtn = document.getElementById('pause-btn');
+    pauseBtn.addEventListener('touchstart', e => {
+        e.preventDefault();
+        if (!pauseDown) {
+            pauseDown = true;
+            if (state === 'playing')     state = 'paused';
+            else if (state === 'paused') state = 'playing';
+        }
+    }, { passive: false });
+    pauseBtn.addEventListener('touchend',    e => { e.preventDefault(); pauseDown = false; }, { passive: false });
+    pauseBtn.addEventListener('touchcancel', e => { e.preventDefault(); pauseDown = false; }, { passive: false });
+    return true;
 }
 
 function _resetGame() {
@@ -80,10 +127,38 @@ function loop(ts) {
 
 function update() {
     player.handleInput(keys);
+    if (isTouchDevice) {
+        autoAim();
+        if (player.attackTimer === 0) keys['Space'] = true;
+    }
     player.update();
     wave.update(player);
 
     if (player.isDead) state = 'gameover';
+}
+
+function autoAim() {
+    const alive = wave.enemies.filter(e => e.alive);
+    if (alive.length === 0) return;
+
+    const pcx = player.rect.centerX;
+    const pcy = player.rect.centerY;
+
+    let nearest = null, minDist = Infinity;
+    for (const e of alive) {
+        const d = Math.hypot(e.rect.centerX - pcx, e.rect.centerY - pcy);
+        if (d < minDist) { minDist = d; nearest = e; }
+    }
+    if (!nearest) return;
+
+    const dx = nearest.rect.centerX - pcx;
+    const dy = nearest.rect.centerY - pcy;
+    // 4方向に量子化して向きを更新
+    if (Math.abs(dx) > Math.abs(dy)) {
+        player.facing = dx > 0 ? DIR.RIGHT : DIR.LEFT;
+    } else {
+        player.facing = dy > 0 ? DIR.DOWN : DIR.UP;
+    }
 }
 
 // ─── 描画 ─────────────────────────────────────────────────────────────────────
@@ -177,7 +252,7 @@ function drawGameOver(c) {
     c.fillText('GAME OVER', LOGI_W / 2, LOGI_H / 2 - 12);
     c.fillStyle = '#FFFFFF';
     c.font = '8px monospace';
-    c.fillText('Press ENTER to retry', LOGI_W / 2, LOGI_H / 2 + 8);
+    c.fillText('ENTER / TAP to retry', LOGI_W / 2, LOGI_H / 2 + 8);
     c.fillText(`WAVE ${wave.waveNum}  KILL ${wave.kills}`, LOGI_W / 2, LOGI_H / 2 + 20);
 }
 
