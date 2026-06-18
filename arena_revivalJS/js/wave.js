@@ -94,6 +94,7 @@ class WaveManager {
                 if (e.takeHit(player.attackRect, player.facing, player.attackDamage)) {
                     this._swingHit = true;
                     player.onSwingHit();
+                    player.knockback(player.facing);  // 攻撃の反動で後退
                 }
             }
             if (e.checkContact(player.rect)) player.takeDamage();

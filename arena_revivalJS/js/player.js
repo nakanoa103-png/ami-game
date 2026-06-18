@@ -88,6 +88,17 @@ class Player {
         return new Rect(x, y, w, h);
     }
 
+    knockback(direction, distance = 10) {
+        const [fdx, fdy] = direction;
+        for (let i = 0; i < distance; i++) {
+            const nx = this.rect.x - fdx;
+            const ny = this.rect.y - fdy;
+            if (this.tilemap.isWallRect(new Rect(nx, ny, S.TILE, S.TILE))) break;
+            this.rect.x = nx;
+            this.rect.y = ny;
+        }
+    }
+
     heal(amount) {
         this.hp = Math.min(this.hp + amount, this.hpMax);
     }
