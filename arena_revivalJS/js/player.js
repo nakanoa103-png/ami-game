@@ -24,8 +24,9 @@ class Player {
         this.hp    = S.PLAYER_HP;
         this.hpMax = S.PLAYER_HP;
 
-        this.invincible  = 0;
-        this.stunTimer   = 0;
+        this.invincible      = 0;
+        this.stunTimer       = 0;
+        this._invincibleTime = this._invincibleTime;
         this.attackTimer = 0;
         this.attackRect  = null;
 
@@ -110,13 +111,13 @@ class Player {
         if (this.invincible > 0) return;
         if (this.armorCharges > 0) {
             this.armorCharges--;
-            this.invincible = S.INVINCIBLE_TIME;
+            this.invincible = this._invincibleTime;
             this.stunTimer   = 20;
             if (fromDir) this.knockback(fromDir, 14);
             return;
         }
         this.hp -= amount;
-        this.invincible = S.INVINCIBLE_TIME;
+        this.invincible = this._invincibleTime;
         this.stunTimer   = 20;
         if (fromDir) this.knockback(fromDir, 14);
     }

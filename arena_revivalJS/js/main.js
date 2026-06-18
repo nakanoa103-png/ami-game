@@ -62,8 +62,9 @@ function init() {
 function initTouchControls() {
     if (!('ontouchstart' in window)) return false;
 
-    // タッチ端末ならボタンを表示
+    // タッチ端末ならボタンを表示（攻撃は自動なので攻撃ボタンは非表示）
     document.getElementById('touch-ui').style.display = 'flex';
+    document.getElementById('attack-btn').style.display = 'none';
     document.getElementById('hint').style.display = 'none';
 
     const btnMap = {
@@ -100,6 +101,10 @@ function initTouchControls() {
 function _resetGame() {
     tilemap = new TileMap();
     player  = new Player(tilemap);
+    if (isTouchDevice) {
+        player.hp = player.hpMax = 8;       // スマホはHP多め
+        player._invincibleTime = 150;        // 無敵時間も長め
+    }
     wave    = new WaveManager(tilemap);
     state   = 'playing';
 }
@@ -126,14 +131,39 @@ function loop(ts) {
 
 function update() {
     player.handleInput(keys);
-    // スマホのみ自動攻撃（PCはSpaceキーで手動）
-    if (isTouchDevice && player.attackTimer === 0) {
-        keys['Space'] = true;
+    if (isTouchDevice) {
+        autoAim();
+        // スタン中でも攻撃は継続（移動だけ止まる）
+        if (player.attackTimer === 0) player.attackTimer = S.ATTACK_DURATION;
     }
     player.update();
     wave.update(player);
 
     if (player.isDead) state = 'gameover';
+}
+
+function autoAim() {
+    const alive = wave.enemies.filter(e => e.alive);
+    if (alive.length === 0) return;
+
+    const pcx = player.rect.centerX;
+    const pcy = player.rect.centerY;
+
+    let nearest = null, minDist = Infinity;
+    for (const e of alive) {
+        const d = Math.hypot(e.rect.centerX - pcx, e.rect.centerY - pcy);
+        if (d < minDist) { minDist = d; nearest = e; }
+    }
+    if (!nearest) return;
+
+    const dx = nearest.rect.centerX - pcx;
+    const dy = nearest.rect.centerY - pcy;
+    // 4方向に量子化して向きを更新
+    if (Math.abs(dx) > Math.abs(dy)) {
+        player.facing = dx > 0 ? DIR.RIGHT : DIR.LEFT;
+    } else {
+        player.facing = dy > 0 ? DIR.DOWN : DIR.UP;
+    }
 }
 
 // ─── 描画 ─────────────────────────────────────────────────────────────────────
