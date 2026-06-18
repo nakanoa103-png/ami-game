@@ -97,7 +97,13 @@ class WaveManager {
                     player.knockback(player.facing);  // 攻撃の反動で後退
                 }
             }
-            if (e.checkContact(player.rect)) player.takeDamage();
+            if (e.checkContact(player.rect)) {
+                const dx = e.rect.centerX - player.rect.centerX;
+                const dy = e.rect.centerY - player.rect.centerY;
+                const fromDir = Math.abs(dx) >= Math.abs(dy)
+                    ? [Math.sign(dx), 0] : [0, Math.sign(dy)];
+                player.takeDamage(1, fromDir);
+            }
         }
 
         // キル差分を累計に加算

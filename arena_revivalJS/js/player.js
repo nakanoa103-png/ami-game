@@ -103,15 +103,17 @@ class Player {
         this.hp = Math.min(this.hp + amount, this.hpMax);
     }
 
-    takeDamage(amount = 1) {
+    takeDamage(amount = 1, fromDir = null) {
         if (this.invincible > 0) return;
         if (this.armorCharges > 0) {
             this.armorCharges--;
             this.invincible = S.INVINCIBLE_TIME;
+            if (fromDir) this.knockback(fromDir, 12);
             return;
         }
         this.hp -= amount;
         this.invincible = S.INVINCIBLE_TIME;
+        if (fromDir) this.knockback(fromDir, 12);
     }
 
     draw(ctx) {
