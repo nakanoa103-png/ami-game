@@ -83,13 +83,19 @@ function initTouchControls() {
         btn.addEventListener('touchcancel', e => { e.preventDefault(); keys[code] = false; }, { passive: false });
     }
 
-    // 攻撃ボタン（タップ1回=1撃）
+    // 攻撃ボタン共通処理（タップ1回=1撃）
+    function onAttackTouch(e) {
+        e.preventDefault();
+        if (player && player.attackTimer === 0) player.attackTimer = S.ATTACK_DURATION;
+    }
     const atkBtn = document.getElementById('dpad-attack');
-    if (atkBtn) {
-        atkBtn.addEventListener('touchstart', e => {
-            e.preventDefault();
-            if (player && player.attackTimer === 0) player.attackTimer = S.ATTACK_DURATION;
-        }, { passive: false });
+    if (atkBtn) atkBtn.addEventListener('touchstart', onAttackTouch, { passive: false });
+
+    // 右端攻撃ボタン
+    const atkBtnR = document.getElementById('attack-btn');
+    if (atkBtnR) {
+        atkBtnR.style.display = 'block';
+        atkBtnR.addEventListener('touchstart', onAttackTouch, { passive: false });
     }
 
     // ポーズボタン
