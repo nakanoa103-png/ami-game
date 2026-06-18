@@ -62,8 +62,10 @@ function init() {
 function initTouchControls() {
     if (!('ontouchstart' in window)) return false;
 
-    document.getElementById('touch-ui').style.display = 'flex';
-    document.getElementById('hint').style.display = 'none';
+    const ui = document.getElementById('touch-ui');
+    if (ui) ui.style.display = 'flex';
+    const hint = document.getElementById('hint');
+    if (hint) hint.style.display = 'none';
 
     // 移動ボタン（押している間だけ有効）
     const moveMap = {
@@ -72,33 +74,39 @@ function initTouchControls() {
         'dpad-left':  'ArrowLeft',
         'dpad-right': 'ArrowRight',
     };
-    for (const [id, code] of Object.entries(moveMap)) {
-        const btn = document.getElementById(id);
+    for (const id in moveMap) {
+        const code = moveMap[id];
+        const btn  = document.getElementById(id);
+        if (!btn) continue;
         btn.addEventListener('touchstart',  e => { e.preventDefault(); keys[code] = true;  }, { passive: false });
         btn.addEventListener('touchend',    e => { e.preventDefault(); keys[code] = false; }, { passive: false });
         btn.addEventListener('touchcancel', e => { e.preventDefault(); keys[code] = false; }, { passive: false });
     }
 
-    // 攻撃ボタン（タップ1回=1撃、押しっぱなしでも連続しない）
+    // 攻撃ボタン（タップ1回=1撃）
     const atkBtn = document.getElementById('dpad-attack');
-    atkBtn.addEventListener('touchstart', e => {
-        e.preventDefault();
-        if (player && player.attackTimer === 0) player.attackTimer = S.ATTACK_DURATION;
-    }, { passive: false });
+    if (atkBtn) {
+        atkBtn.addEventListener('touchstart', e => {
+            e.preventDefault();
+            if (player && player.attackTimer === 0) player.attackTimer = S.ATTACK_DURATION;
+        }, { passive: false });
+    }
 
-    // ポーズボタン（トグル、リピートなし）
+    // ポーズボタン
     let pauseDown = false;
     const pauseBtn = document.getElementById('pause-btn');
-    pauseBtn.addEventListener('touchstart', e => {
-        e.preventDefault();
-        if (!pauseDown) {
-            pauseDown = true;
-            if (state === 'playing')     state = 'paused';
-            else if (state === 'paused') state = 'playing';
-        }
-    }, { passive: false });
-    pauseBtn.addEventListener('touchend',    e => { e.preventDefault(); pauseDown = false; }, { passive: false });
-    pauseBtn.addEventListener('touchcancel', e => { e.preventDefault(); pauseDown = false; }, { passive: false });
+    if (pauseBtn) {
+        pauseBtn.addEventListener('touchstart', e => {
+            e.preventDefault();
+            if (!pauseDown) {
+                pauseDown = true;
+                if (state === 'playing')     state = 'paused';
+                else if (state === 'paused') state = 'playing';
+            }
+        }, { passive: false });
+        pauseBtn.addEventListener('touchend',    e => { e.preventDefault(); pauseDown = false; }, { passive: false });
+        pauseBtn.addEventListener('touchcancel', e => { e.preventDefault(); pauseDown = false; }, { passive: false });
+    }
     return true;
 }
 
