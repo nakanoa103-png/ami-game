@@ -48,7 +48,51 @@ function init() {
     assets.load('sword',     'assets/images/sword.png',     '#FFFFFF');
 
     _resetGame();
+    initTouchControls();
+
+    // ゲームオーバー中のタップでリトライ
+    canvas.addEventListener('touchstart', e => {
+        if (state === 'gameover') { e.preventDefault(); _resetGame(); }
+    }, { passive: false });
+
     requestAnimationFrame(loop);
+}
+
+function initTouchControls() {
+    if (!('ontouchstart' in window)) return;
+
+    // タッチ端末ならボタンを表示
+    document.getElementById('touch-ui').style.display = 'flex';
+    document.getElementById('hint').style.display = 'none';
+
+    const btnMap = {
+        'dpad-up':    'ArrowUp',
+        'dpad-down':  'ArrowDown',
+        'dpad-left':  'ArrowLeft',
+        'dpad-right': 'ArrowRight',
+        'attack-btn': 'Space',
+    };
+
+    for (const [id, code] of Object.entries(btnMap)) {
+        const btn = document.getElementById(id);
+        btn.addEventListener('touchstart',  e => { e.preventDefault(); keys[code] = true;  }, { passive: false });
+        btn.addEventListener('touchend',    e => { e.preventDefault(); keys[code] = false; }, { passive: false });
+        btn.addEventListener('touchcancel', e => { e.preventDefault(); keys[code] = false; }, { passive: false });
+    }
+
+    // ポーズボタン（トグル、リピートなし）
+    let pauseDown = false;
+    const pauseBtn = document.getElementById('pause-btn');
+    pauseBtn.addEventListener('touchstart', e => {
+        e.preventDefault();
+        if (!pauseDown) {
+            pauseDown = true;
+            if (state === 'playing')     state = 'paused';
+            else if (state === 'paused') state = 'playing';
+        }
+    }, { passive: false });
+    pauseBtn.addEventListener('touchend',    e => { e.preventDefault(); pauseDown = false; }, { passive: false });
+    pauseBtn.addEventListener('touchcancel', e => { e.preventDefault(); pauseDown = false; }, { passive: false });
 }
 
 function _resetGame() {
@@ -177,7 +221,7 @@ function drawGameOver(c) {
     c.fillText('GAME OVER', LOGI_W / 2, LOGI_H / 2 - 12);
     c.fillStyle = '#FFFFFF';
     c.font = '8px monospace';
-    c.fillText('Press ENTER to retry', LOGI_W / 2, LOGI_H / 2 + 8);
+    c.fillText('ENTER / TAP to retry', LOGI_W / 2, LOGI_H / 2 + 8);
     c.fillText(`WAVE ${wave.waveNum}  KILL ${wave.kills}`, LOGI_W / 2, LOGI_H / 2 + 20);
 }
 
