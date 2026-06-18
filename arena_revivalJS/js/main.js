@@ -67,20 +67,26 @@ function initTouchControls() {
     document.getElementById('attack-btn').style.display = 'none';
     document.getElementById('hint').style.display = 'none';
 
-    const btnMap = {
-        'dpad-up':     'ArrowUp',
-        'dpad-down':   'ArrowDown',
-        'dpad-left':   'ArrowLeft',
-        'dpad-right':  'ArrowRight',
-        'dpad-attack': 'Space',
+    // 移動ボタン（押している間だけ有効）
+    const moveMap = {
+        'dpad-up':    'ArrowUp',
+        'dpad-down':  'ArrowDown',
+        'dpad-left':  'ArrowLeft',
+        'dpad-right': 'ArrowRight',
     };
-
-    for (const [id, code] of Object.entries(btnMap)) {
+    for (const [id, code] of Object.entries(moveMap)) {
         const btn = document.getElementById(id);
         btn.addEventListener('touchstart',  e => { e.preventDefault(); keys[code] = true;  }, { passive: false });
         btn.addEventListener('touchend',    e => { e.preventDefault(); keys[code] = false; }, { passive: false });
         btn.addEventListener('touchcancel', e => { e.preventDefault(); keys[code] = false; }, { passive: false });
     }
+
+    // 攻撃ボタン（タップ1回=1撃、押しっぱなしでも連続しない）
+    const atkBtn = document.getElementById('dpad-attack');
+    atkBtn.addEventListener('touchstart', e => {
+        e.preventDefault();
+        if (player && player.attackTimer === 0) player.attackTimer = S.ATTACK_DURATION;
+    }, { passive: false });
 
     // ポーズボタン（トグル、リピートなし）
     let pauseDown = false;
