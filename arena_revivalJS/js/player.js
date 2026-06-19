@@ -26,7 +26,7 @@ class Player {
 
         this.invincible      = 0;
         this.stunTimer       = 0;
-        this._invincibleTime = this._invincibleTime;
+        this._invincibleTime = S.INVINCIBLE_TIME;
         this.attackTimer = 0;
         this.attackRect  = null;
 
@@ -41,7 +41,11 @@ class Player {
     get isDead()       { return this.hp <= 0; }
 
     handleInput(keys) {
-        if (this.stunTimer > 0) return;   // 被弾直後は操作無効
+        // 攻撃は常に受け付ける（スタン中でも）
+        if (keys['Space'] && this.attackTimer === 0) {
+            this.attackTimer = S.ATTACK_DURATION;
+        }
+        if (this.stunTimer > 0) return;   // 移動のみブロック
         const spd = this.moveSpeed;
         let dx = 0, dy = 0;
         if (keys['ArrowLeft']  || keys['KeyA']) dx -= spd;
@@ -62,9 +66,6 @@ class Player {
                 this.rect = next;
                 this.facing = dy > 0 ? DIR.DOWN : DIR.UP;
             }
-        }
-        if (keys['Space'] && this.attackTimer === 0) {
-            this.attackTimer = S.ATTACK_DURATION;
         }
     }
 
