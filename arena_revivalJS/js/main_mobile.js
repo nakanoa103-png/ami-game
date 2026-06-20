@@ -18,6 +18,16 @@ const LUNGE_FRAMES      = 45;     // 突進の継続フレーム数
 const CIRCLE_FRAMES_MIN = 50;     // 突進と突進の間の周回フレーム(最小)
 const CIRCLE_FRAMES_MAX = 110;    // 同(最大)。短いほど頻繁に突っ込む=簡単
 
+// ── フェーズ5b: 4方向直線視界＋状態遷移＋囲み ──
+const VISION_RANGE   = 6;    // 視界の最大距離(タイル数)。向いている方向の一直線のみ
+const KYORO_MIN      = 25;   // 未発見時に向きを変える間隔(最小フレーム)
+const KYORO_MAX      = 70;   // 同(最大)
+const PATROL_SPEED   = 0.4;  // 未発見時の巡回速度(ENEMY_SPEEDに対する倍率)
+const LOSE_FRAMES    = 120;  // 発見後、視線が切れてから見失うまで(フレーム)
+const SEARCH_FRAMES  = 150;  // 見失い後、最後に見た方向を探す時間(フレーム)
+const SURROUND_RADIUS = 2.2 * 16; // 囲むときプレイヤーから取る距離(px)
+const SURROUND_ARC    = 130 * Math.PI / 180; // 背後を中心に囲む角度の広がり(±)。正面は避ける
+
 let canvas, ctx, logi, lctx;
 let tilemap, player, wave;
 let keys     = {};

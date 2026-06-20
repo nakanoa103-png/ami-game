@@ -1,4 +1,9 @@
-// enemy_mobile.js — よそ見AI付き敵（スマホ専用）
+// enemy_mobile.js — 4方向直線視界＋状態遷移＋囲みAI（スマホ専用）
+
+const EST = { UNAWARE: 0, CHASING: 1, SEARCHING: 2 };
+
+// 囲みスロット分散用のカウンタ（敵生成ごとに別の角度を割り当てる）
+let _surroundCounter = 0;
 
 class EnemyMobile {
     constructor(tileX, tileY, tilemap) {
@@ -7,109 +12,156 @@ class EnemyMobile {
         this.facing  = [0, 1];
         this.alive   = true;
         this.hp      = 3;
-        this.invincible    = 0;
-        this._waveNum      = 1;
-        this._lookAwayTimer = 0;
-        this._lookAwayDir   = [1, 0];
-        this._lungeTimer   = 0;   // >0 の間はまっすぐ突進
-        this._circleTimer  = randInt(CIRCLE_FRAMES_MIN, CIRCLE_FRAMES_MAX); // 次の突進までの周回時間
+        this.invincible = 0;
+        this._waveNum   = 1;
+
+        this.state      = EST.UNAWARE;
+        this._kyoroTimer  = randInt(KYORO_MIN, KYORO_MAX);
+        this._patrolDir   = [[1,0],[-1,0],[0,1],[0,-1]][randInt(0,3)];
+        this._lastSeen    = null;   // [px, py]
+        this._loseTimer   = 0;
+        this._searchTimer = 0;
+
+        // 囲みスロット: 背後中心 ±SURROUND_ARC を黄金角で分散
+        this._surroundFrac = ((_surroundCounter++ * 0.61803398875) % 1);
+
+        this._lungeTimer  = 0;
+        this._circleTimer = randInt(CIRCLE_FRAMES_MIN, CIRCLE_FRAMES_MAX);
     }
 
-    // ウェーブが進むほどよそ見が減る
-    get _lookAwayChance() {
-        return Math.max(LOOK_AWAY_CHANCE - this._waveNum * 0.0005, 0.002);
+    // ── 視界: 向いている方向の一直線のみ。壁で遮断、最大VISION_RANGE ──
+    _canSeePlayer(playerRect) {
+        const [fx, fy] = this.facing;
+        if (fx === 0 && fy === 0) return false;
+        const T = S.TILE;
+        let col = Math.floor(this.rect.centerX / T);
+        let row = Math.floor(this.rect.centerY / T);
+        const pcol = Math.floor(playerRect.centerX / T);
+        const prow = Math.floor(playerRect.centerY / T);
+        for (let i = 1; i <= VISION_RANGE; i++) {
+            col += fx; row += fy;
+            // 壁タイルで視線終了（奥は見えない）
+            if (this.tilemap.isWall(col * T, row * T)) return false;
+            if (col === pcol && row === prow) return true;   // 発見
+        }
+        return false;
     }
 
     update(playerRect, playerFacing) {
         if (!this.alive) return;
         if (this.invincible > 0) this.invincible--;
 
-        this._move(playerRect, playerFacing);
-        this._updateFacing(playerRect);
+        if      (this.state === EST.UNAWARE)   this._updateUnaware(playerRect);
+        else if (this.state === EST.CHASING)   this._updateChasing(playerRect, playerFacing);
+        else                                   this._updateSearching(playerRect);
     }
 
-    _move(playerRect, playerFacing) {
+    // ── 未発見: キョロキョロ＋ゆるく巡回。視界に入れば発見 ──
+    _updateUnaware(playerRect) {
+        if (--this._kyoroTimer <= 0) {
+            this.facing     = [[1,0],[-1,0],[0,1],[0,-1]][randInt(0,3)];
+            this._patrolDir = this.facing;
+            this._kyoroTimer = randInt(KYORO_MIN, KYORO_MAX);
+        }
+        if (this._canSeePlayer(playerRect)) { this._toChasing(playerRect); return; }
+        // ゆるく巡回（壁にぶつかったら次のキョロで方向転換）
+        if (!this._step(this._patrolDir[0], this._patrolDir[1], S.ENEMY_SPEED * PATROL_SPEED)) {
+            this._kyoroTimer = 0;
+        }
+    }
+
+    // ── 発見: 囲み＋たまに突進。視線維持できなければ見失いへ ──
+    _updateChasing(playerRect, playerFacing) {
         const pcx = playerRect.centerX, pcy = playerRect.centerY;
-        const dx = pcx - this.rect.centerX;
-        const dy = pcy - this.rect.centerY;
-        const dist = Math.hypot(dx, dy);
-        if (dist < 1) return;
+        const dist = Math.hypot(pcx - this.rect.centerX, pcy - this.rect.centerY);
 
-        const inx = dx / dist, iny = dy / dist;   // プレイヤーへ向かう単位ベクトル（内向き）
-        let mvx = inx, mvy = iny;                  // 既定: まっすぐ接近（突進）
+        this._faceToward(pcx, pcy);   // 攻撃のため常にプレイヤーを向く
 
-        if (this._lungeTimer > 0) {
-            // 突進中: まっすぐ突っ込む（mvx,mvy は inward のまま）= 攻撃チャンス
-            this._lungeTimer--;
-        } else if (playerFacing && dist < FLANK_RANGE) {
-            // 周回時間が尽きたら突進開始（プレイヤーに隙を作る）
-            if (--this._circleTimer <= 0) {
-                this._lungeTimer  = LUNGE_FRAMES;
-                this._circleTimer = randInt(CIRCLE_FRAMES_MIN, CIRCLE_FRAMES_MAX);
-            } else {
-                // 回り込み: プレイヤーの正面側にいるほど弧を描いて背後・側面へ回る
-                const [pfx, pfy] = playerFacing;
-                const outx = -inx, outy = -iny;            // プレイヤー→敵（外向き）
-                const forwardness = outx * pfx + outy * pfy; // +1正面 / 0真横 / -1背後
-
-                if (forwardness > FLANK_THRESHOLD) {
-                    // 内向きに直交する接線。背後(-facing)へ向かう側を選ぶ
-                    const backx = -pfx, backy = -pfy;
-                    let tanx = -iny, tany = inx;            // 内向きを+90°回転
-                    if (tanx * backx + tany * backy < 0) { tanx = -tanx; tany = -tany; }
-
-                    // 前方度が高いほど接線（周回）を強く、側面に来たら接近へ移行
-                    const t = (forwardness - FLANK_THRESHOLD) / (1 - FLANK_THRESHOLD); // 0〜1
-                    const w = t * FLANK_STRENGTH;
-                    mvx = inx * (1 - w) + tanx * w;
-                    mvy = iny * (1 - w) + tany * w;
-                    const m = Math.hypot(mvx, mvy) || 1;
-                    mvx /= m; mvy /= m;
-                }
-            }
+        // 視線が通る or 近接していれば記憶を更新、切れたらカウントダウン
+        if (this._canSeePlayer(playerRect) || dist < S.TILE * 3) {
+            this._loseTimer = LOSE_FRAMES;
+            this._lastSeen  = [pcx, pcy];
+        } else if (--this._loseTimer <= 0) {
+            this._toSearching(); return;
         }
 
-        const spd = S.ENEMY_SPEED;
+        if (this._lungeTimer > 0) {
+            // 突進: まっすぐ突っ込む（攻撃チャンス）
+            this._lungeTimer--;
+            const d = this._unit(pcx - this.rect.centerX, pcy - this.rect.centerY);
+            this._step(d[0], d[1], S.ENEMY_SPEED);
+        } else {
+            if (--this._circleTimer <= 0 && dist < FLANK_RANGE) {
+                this._lungeTimer  = LUNGE_FRAMES;
+                this._circleTimer = randInt(CIRCLE_FRAMES_MIN, CIRCLE_FRAMES_MAX);
+            }
+            // 囲みスロット（正面を避けた側面・背後）へ回り込む
+            const [tx, ty] = this._surroundSlot(playerRect, playerFacing);
+            const d = this._unit(tx - this.rect.centerX, ty - this.rect.centerY);
+            this._step(d[0], d[1], S.ENEMY_SPEED);
+        }
+    }
+
+    // ── 見失い: 最後に見た位置へ。再発見でChasing、時間切れでUnaware ──
+    _updateSearching(playerRect) {
+        if (this._canSeePlayer(playerRect)) { this._toChasing(playerRect); return; }
+        if (--this._searchTimer <= 0 || !this._lastSeen) { this._toUnaware(); return; }
+
+        const [lx, ly] = this._lastSeen;
+        this._faceToward(lx, ly);
+        const d = this._unit(lx - this.rect.centerX, ly - this.rect.centerY);
+        this._step(d[0], d[1], S.ENEMY_SPEED * 0.8);
+        if (Math.hypot(lx - this.rect.centerX, ly - this.rect.centerY) < S.TILE) this._toUnaware();
+    }
+
+    // ── 囲みスロット: 背後中心に ±SURROUND_ARC で分散した1点 ──
+    _surroundSlot(playerRect, playerFacing) {
+        const pcx = playerRect.centerX, pcy = playerRect.centerY;
+        const [pfx, pfy] = playerFacing || [0, 1];
+        const backAngle = Math.atan2(-pfy, -pfx);
+        const offset = (this._surroundFrac - 0.5) * 2 * SURROUND_ARC;  // -ARC..+ARC
+        const a = backAngle + offset;
+        return [pcx + Math.cos(a) * SURROUND_RADIUS, pcy + Math.sin(a) * SURROUND_RADIUS];
+    }
+
+    // ── 状態遷移 ──
+    _toChasing(playerRect)  {
+        this.state = EST.CHASING;
+        this._loseTimer = LOSE_FRAMES;
+        this._lastSeen  = [playerRect.centerX, playerRect.centerY];
+    }
+    _toSearching() { this.state = EST.SEARCHING; this._searchTimer = SEARCH_FRAMES; }
+    _toUnaware()   { this.state = EST.UNAWARE; this._kyoroTimer = randInt(KYORO_MIN, KYORO_MAX); }
+
+    // ── 移動補助: 軸ごとに壁判定。動けたら true ──
+    _step(mvx, mvy, spd) {
+        let moved = false;
         const nx = this.rect.x + mvx * spd;
         const ny = this.rect.y + mvy * spd;
+        if (!this.tilemap.isWallRect(new Rect(nx, this.rect.y, S.TILE, S.TILE))) { this.rect.x = nx; if (mvx) moved = true; }
+        if (!this.tilemap.isWallRect(new Rect(this.rect.x, ny, S.TILE, S.TILE))) { this.rect.y = ny; if (mvy) moved = true; }
+        return moved;
+    }
+
+    _unit(x, y) {
+        const d = Math.hypot(x, y);
+        return d < 0.0001 ? [0, 0] : [x / d, y / d];
+    }
+
+    _faceToward(tx, ty) {
+        const dx = tx - this.rect.centerX, dy = ty - this.rect.centerY;
+        if (Math.abs(dx) >= Math.abs(dy)) this.facing = dx >= 0 ? [1, 0] : [-1, 0];
+        else                              this.facing = dy >= 0 ? [0, 1] : [0, -1];
+    }
+
+    // ① 押し合い用
+    pushAway(dx, dy) {
+        const nx = this.rect.x + dx;
+        const ny = this.rect.y + dy;
         if (!this.tilemap.isWallRect(new Rect(nx, this.rect.y, S.TILE, S.TILE))) this.rect.x = nx;
         if (!this.tilemap.isWallRect(new Rect(this.rect.x, ny, S.TILE, S.TILE))) this.rect.y = ny;
     }
 
-    _updateFacing(playerRect) {
-        if (this._lookAwayTimer > 0) {
-            this._lookAwayTimer--;
-            this.facing = this._lookAwayDir;
-            return;
-        }
-
-        // プレイヤー方向を向く
-        const dx = playerRect.centerX - this.rect.centerX;
-        const dy = playerRect.centerY - this.rect.centerY;
-        if (Math.abs(dx) >= Math.abs(dy)) {
-            this.facing = dx >= 0 ? [1, 0] : [-1, 0];
-        } else {
-            this.facing = dy >= 0 ? [0, 1] : [0, -1];
-        }
-
-        // ランダムによそ見
-        if (Math.random() < this._lookAwayChance) {
-            this._lookAwayTimer = LOOK_AWAY_FRAMES;
-            const all = [[1,0],[-1,0],[0,1],[0,-1]];
-            const others = all.filter(([fx,fy]) => !(fx===this.facing[0] && fy===this.facing[1]));
-            this._lookAwayDir = others[Math.floor(Math.random() * others.length)];
-        }
-    }
-
-    takeHit() {
-        if (this.invincible > 0) return false;
-        this.hp--;
-        this.invincible = 20;
-        if (this.hp <= 0) this.alive = false;
-        return true;
-    }
-
-    // pushDir 方向へ弾き飛ばす（壁で停止）
     knockback(pushDir, distance = KNOCKBACK_DIST) {
         const [dx, dy] = pushDir;
         for (let i = 0; i < distance; i++) {
@@ -121,12 +173,21 @@ class EnemyMobile {
         }
     }
 
-    // ① 押し合い用: 軸ごとに壁判定して少しずらす
-    pushAway(dx, dy) {
-        const nx = this.rect.x + dx;
-        const ny = this.rect.y + dy;
-        if (!this.tilemap.isWallRect(new Rect(nx, this.rect.y, S.TILE, S.TILE))) this.rect.x = nx;
-        if (!this.tilemap.isWallRect(new Rect(this.rect.x, ny, S.TILE, S.TILE))) this.rect.y = ny;
+    takeHit() {
+        if (this.invincible > 0) return false;
+        this.hp--;
+        this.invincible = 20;
+        if (this.hp <= 0) this.alive = false;
+        // 攻撃を受けたら気づく
+        if (this.state === EST.UNAWARE) { this.state = EST.SEARCHING; this._searchTimer = SEARCH_FRAMES; }
+        return true;
+    }
+
+    // 状態で向き矢印の色を変える（灰=未発見 / 赤=発見 / 黄=探索）
+    _stateColor() {
+        return this.state === EST.CHASING ? '#FF4444'
+             : this.state === EST.SEARCHING ? '#FFCC44'
+             : '#888888';
     }
 
     draw(ctx) {
@@ -134,7 +195,7 @@ class EnemyMobile {
         if (this.invincible === 0 || Math.floor(this.invincible / 3) % 2 !== 0) {
             assets.draw(ctx, 'enemy', this.rect.x, this.rect.y);
         }
-        drawFacingArrow(ctx, this.rect.centerX, this.rect.y - 5, this.facing, '#FF4444');
+        drawFacingArrow(ctx, this.rect.centerX, this.rect.y - 5, this.facing, this._stateColor());
     }
 }
 
@@ -148,6 +209,6 @@ class GuardEnemyMobile extends EnemyMobile {
         if (this.invincible === 0 || Math.floor(this.invincible / 3) % 2 !== 0) {
             assets.draw(ctx, 'guard', this.rect.x, this.rect.y);
         }
-        drawFacingArrow(ctx, this.rect.centerX, this.rect.y - 5, this.facing, '#FF9944');
+        drawFacingArrow(ctx, this.rect.centerX, this.rect.y - 5, this.facing, this._stateColor());
     }
 }
