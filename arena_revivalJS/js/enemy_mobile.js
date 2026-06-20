@@ -18,23 +18,51 @@ class EnemyMobile {
         return Math.max(LOOK_AWAY_CHANCE - this._waveNum * 0.0005, 0.002);
     }
 
-    update(playerRect) {
+    update(playerRect, playerFacing) {
         if (!this.alive) return;
         if (this.invincible > 0) this.invincible--;
 
-        this._move(playerRect);
+        this._move(playerRect, playerFacing);
         this._updateFacing(playerRect);
     }
 
-    _move(playerRect) {
-        const dx = playerRect.centerX - this.rect.centerX;
-        const dy = playerRect.centerY - this.rect.centerY;
+    _move(playerRect, playerFacing) {
+        const pcx = playerRect.centerX, pcy = playerRect.centerY;
+        const dx = pcx - this.rect.centerX;
+        const dy = pcy - this.rect.centerY;
         const dist = Math.hypot(dx, dy);
         if (dist < 1) return;
 
+        let mvx = dx / dist, mvy = dy / dist;   // 既定: まっすぐ接近（不意打ち狙い）
+
+        // 正面突撃回避: プレイヤーが自分の方を向いている（剣の延長線上）なら横へずれる
+        if (playerFacing) {
+            const [pfx, pfy] = playerFacing;
+            const rx = this.rect.centerX - pcx;   // プレイヤーから見た相対位置
+            const ry = this.rect.centerY - pcy;
+            const forward = rx * pfx + ry * pfy;  // 正面方向の距離（正=前方）
+            const perpx = -pfy, perpy = pfx;      // 正面に直交する軸
+            const lateral = rx * perpx + ry * perpy; // 横ずれ量（符号付き）
+
+            const inDanger = forward > 0
+                && forward < CHARGE_AVOID_RANGE
+                && Math.abs(lateral) < CHARGE_AVOID_WIDTH;
+
+            if (inDanger) {
+                // 真正面に近いほど左右どちらに逃げるか安定させる
+                let side = lateral >= 0 ? 1 : -1;
+                if (Math.abs(lateral) < 1) side = (Math.floor(this.rect.x) % 2 === 0) ? 1 : -1;
+                // 横移動を主体に、少しだけ接近を混ぜる
+                mvx = perpx * side + (dx / dist) * 0.35;
+                mvy = perpy * side + (dy / dist) * 0.35;
+                const m = Math.hypot(mvx, mvy) || 1;
+                mvx /= m; mvy /= m;
+            }
+        }
+
         const spd = S.ENEMY_SPEED;
-        const nx = this.rect.x + (dx / dist) * spd;
-        const ny = this.rect.y + (dy / dist) * spd;
+        const nx = this.rect.x + mvx * spd;
+        const ny = this.rect.y + mvy * spd;
         if (!this.tilemap.isWallRect(new Rect(nx, this.rect.y, S.TILE, S.TILE))) this.rect.x = nx;
         if (!this.tilemap.isWallRect(new Rect(this.rect.x, ny, S.TILE, S.TILE))) this.rect.y = ny;
     }

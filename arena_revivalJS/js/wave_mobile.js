@@ -97,7 +97,7 @@ class WaveManagerMobile {
     }
 
     _updateActive(player) {
-        for (const e of this.enemies) e.update(player.rect);
+        for (const e of this.enemies) e.update(player.rect, player.facing);
 
         // ① 敵同士の押し合い（重なり解消）→ かたまりが崩れて多方向から来る
         this._separateEnemies();
@@ -150,16 +150,18 @@ class WaveManagerMobile {
         if (playerHits) {
             // 剣ヒット: この敵からはダメージを受けない（剣で防御）
             if (enemy.takeHit()) {
-                enemy.knockback(player.facing, KNOCKBACK_DIST);   // 敵を前方へ弾く
+                enemy.knockback(player.facing, KNOCKBACK_DIST);   // ダメージ時に敵を前方へ弾く
             }
             if (enemyHits) {
-                // 相打ち（正面衝突）→ 自分も後退（ダメージは無し）
-                player.knockback([-player.facing[0], -player.facing[1]], KNOCKBACK_DIST);
+                // 相打ち（正面衝突）→ 自分も反対方向へ後退（ダメージは無し）
+                player.knockback([-player.facing[0], -player.facing[1]], PLAYER_KNOCKBACK_DIST);
             }
             // playerHits && !enemyHits → 相手だけノックバック（上で実施済み）
         } else if (enemyHits) {
-            // こちらだけ攻撃された → 自分だけダメージ＆ノックバック
-            player.takeDamage(1, enemy.facing);   // enemy.facing 方向へ弾かれる（_applyHitEffect内）
+            // こちらだけ攻撃された → 自分は反対方向へ飛ぶ＋敵も逆方向へ弾いて密着を解く
+            if (player.takeDamage(1, enemy.facing)) {   // _applyHitEffect内で反対方向へノックバック
+                enemy.knockback([-enemy.facing[0], -enemy.facing[1]], KNOCKBACK_DIST);
+            }
         }
         // 両方false → 横すれ違い、ノーダメージ
     }

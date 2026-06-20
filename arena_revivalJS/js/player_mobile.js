@@ -78,7 +78,7 @@ class PlayerMobile {
     _applyHitEffect(pushDir) {
         this.invincible = this._invincibleTime;
         this.stunTimer  = 15;
-        if (pushDir) this.knockback(pushDir, KNOCKBACK_DIST);
+        if (pushDir) this.knockback(pushDir, PLAYER_KNOCKBACK_DIST);
     }
 
     // pushDir 方向へそのまま移動（弾かれる向きを渡す）
