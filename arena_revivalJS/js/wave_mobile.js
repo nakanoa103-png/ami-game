@@ -149,7 +149,10 @@ class WaveManagerMobile {
 
         if (playerHits) {
             // 剣ヒット: この敵からはダメージを受けない（剣で防御）
-            if (enemy.takeHit()) {
+            // 被弾で即発見＋攻撃してきた方向（自分のfacingの逆＝プレイヤー側）を向かせる
+            const attackerDir = [-player.facing[0], -player.facing[1]];
+            const seenPos     = [player.rect.centerX, player.rect.centerY];
+            if (enemy.takeHit(attackerDir, seenPos)) {
                 enemy.knockback(player.facing, KNOCKBACK_DIST);   // ダメージ時に敵を前方へ弾く
             }
             if (enemyHits) {

@@ -27,6 +27,7 @@ const LOSE_FRAMES    = 120;  // 発見後、視線が切れてから見失うま
 const SEARCH_FRAMES  = 150;  // 見失い後、最後に見た方向を探す時間(フレーム)
 const SURROUND_RADIUS = 2.2 * 16; // 囲むときプレイヤーから取る距離(px)
 const SURROUND_ARC    = 130 * Math.PI / 180; // 背後を中心に囲む角度の広がり(±)。正面は避ける
+const ALIGN_TOL       = 40 * Math.PI / 180;  // 囲み角度に「整列した」とみなす許容角
 
 let canvas, ctx, logi, lctx;
 let tilemap, player, wave;
