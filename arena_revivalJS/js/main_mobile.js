@@ -12,7 +12,11 @@ const BOOTS_MAX_STACK   = 4;       // ③ブーツ加速の上限（壁抜け防
 // 回り込みAI: 正面にいる敵は弧を描いて背後・側面へ回り込む
 const FLANK_RANGE     = 6 * 16;   // 回り込みを始める距離(px)。これより遠いと直進
 const FLANK_THRESHOLD = -0.2;     // 前方度がこれを超えたら回り込む(-1背後〜+1正面)
-const FLANK_STRENGTH  = 0.92;     // 真正面での横回り込みの強さ(0直進〜1完全周回)
+const FLANK_STRENGTH  = 0.85;     // 真正面での横回り込みの強さ(0直進〜1完全周回)
+// 周回⇄突進のリズム: 普段は回り込み、たまに直進突撃して隙を作る（=攻撃チャンス）
+const LUNGE_FRAMES      = 45;     // 突進の継続フレーム数
+const CIRCLE_FRAMES_MIN = 50;     // 突進と突進の間の周回フレーム(最小)
+const CIRCLE_FRAMES_MAX = 110;    // 同(最大)。短いほど頻繁に突っ込む=簡単
 
 let canvas, ctx, logi, lctx;
 let tilemap, player, wave;

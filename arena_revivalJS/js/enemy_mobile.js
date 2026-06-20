@@ -11,6 +11,8 @@ class EnemyMobile {
         this._waveNum      = 1;
         this._lookAwayTimer = 0;
         this._lookAwayDir   = [1, 0];
+        this._lungeTimer   = 0;   // >0 の間はまっすぐ突進
+        this._circleTimer  = randInt(CIRCLE_FRAMES_MIN, CIRCLE_FRAMES_MAX); // 次の突進までの周回時間
     }
 
     // ウェーブが進むほどよそ見が減る
@@ -34,27 +36,36 @@ class EnemyMobile {
         if (dist < 1) return;
 
         const inx = dx / dist, iny = dy / dist;   // プレイヤーへ向かう単位ベクトル（内向き）
-        let mvx = inx, mvy = iny;                  // 既定: まっすぐ接近
+        let mvx = inx, mvy = iny;                  // 既定: まっすぐ接近（突進）
 
-        // 回り込み: プレイヤーの正面側にいるほど弧を描いて背後・側面へ回る
-        if (playerFacing && dist < FLANK_RANGE) {
-            const [pfx, pfy] = playerFacing;
-            const outx = -inx, outy = -iny;            // プレイヤー→敵（外向き）
-            const forwardness = outx * pfx + outy * pfy; // +1正面 / 0真横 / -1背後
+        if (this._lungeTimer > 0) {
+            // 突進中: まっすぐ突っ込む（mvx,mvy は inward のまま）= 攻撃チャンス
+            this._lungeTimer--;
+        } else if (playerFacing && dist < FLANK_RANGE) {
+            // 周回時間が尽きたら突進開始（プレイヤーに隙を作る）
+            if (--this._circleTimer <= 0) {
+                this._lungeTimer  = LUNGE_FRAMES;
+                this._circleTimer = randInt(CIRCLE_FRAMES_MIN, CIRCLE_FRAMES_MAX);
+            } else {
+                // 回り込み: プレイヤーの正面側にいるほど弧を描いて背後・側面へ回る
+                const [pfx, pfy] = playerFacing;
+                const outx = -inx, outy = -iny;            // プレイヤー→敵（外向き）
+                const forwardness = outx * pfx + outy * pfy; // +1正面 / 0真横 / -1背後
 
-            if (forwardness > FLANK_THRESHOLD) {
-                // 内向きに直交する接線。背後(-facing)へ向かう側を選ぶ
-                const backx = -pfx, backy = -pfy;
-                let tanx = -iny, tany = inx;            // 内向きを+90°回転
-                if (tanx * backx + tany * backy < 0) { tanx = -tanx; tany = -tany; }
+                if (forwardness > FLANK_THRESHOLD) {
+                    // 内向きに直交する接線。背後(-facing)へ向かう側を選ぶ
+                    const backx = -pfx, backy = -pfy;
+                    let tanx = -iny, tany = inx;            // 内向きを+90°回転
+                    if (tanx * backx + tany * backy < 0) { tanx = -tanx; tany = -tany; }
 
-                // 前方度が高いほど接線（周回）を強く、側面に来たら接近へ移行
-                const t = (forwardness - FLANK_THRESHOLD) / (1 - FLANK_THRESHOLD); // 0〜1
-                const w = t * FLANK_STRENGTH;
-                mvx = inx * (1 - w) + tanx * w;
-                mvy = iny * (1 - w) + tany * w;
-                const m = Math.hypot(mvx, mvy) || 1;
-                mvx /= m; mvy /= m;
+                    // 前方度が高いほど接線（周回）を強く、側面に来たら接近へ移行
+                    const t = (forwardness - FLANK_THRESHOLD) / (1 - FLANK_THRESHOLD); // 0〜1
+                    const w = t * FLANK_STRENGTH;
+                    mvx = inx * (1 - w) + tanx * w;
+                    mvy = iny * (1 - w) + tany * w;
+                    const m = Math.hypot(mvx, mvy) || 1;
+                    mvx /= m; mvy /= m;
+                }
             }
         }
 
