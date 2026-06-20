@@ -33,28 +33,26 @@ class EnemyMobile {
         const dist = Math.hypot(dx, dy);
         if (dist < 1) return;
 
-        let mvx = dx / dist, mvy = dy / dist;   // 既定: まっすぐ接近（不意打ち狙い）
+        const inx = dx / dist, iny = dy / dist;   // プレイヤーへ向かう単位ベクトル（内向き）
+        let mvx = inx, mvy = iny;                  // 既定: まっすぐ接近
 
-        // 正面突撃回避: プレイヤーが自分の方を向いている（剣の延長線上）なら横へずれる
-        if (playerFacing) {
+        // 回り込み: プレイヤーの正面側にいるほど弧を描いて背後・側面へ回る
+        if (playerFacing && dist < FLANK_RANGE) {
             const [pfx, pfy] = playerFacing;
-            const rx = this.rect.centerX - pcx;   // プレイヤーから見た相対位置
-            const ry = this.rect.centerY - pcy;
-            const forward = rx * pfx + ry * pfy;  // 正面方向の距離（正=前方）
-            const perpx = -pfy, perpy = pfx;      // 正面に直交する軸
-            const lateral = rx * perpx + ry * perpy; // 横ずれ量（符号付き）
+            const outx = -inx, outy = -iny;            // プレイヤー→敵（外向き）
+            const forwardness = outx * pfx + outy * pfy; // +1正面 / 0真横 / -1背後
 
-            const inDanger = forward > 0
-                && forward < CHARGE_AVOID_RANGE
-                && Math.abs(lateral) < CHARGE_AVOID_WIDTH;
+            if (forwardness > FLANK_THRESHOLD) {
+                // 内向きに直交する接線。背後(-facing)へ向かう側を選ぶ
+                const backx = -pfx, backy = -pfy;
+                let tanx = -iny, tany = inx;            // 内向きを+90°回転
+                if (tanx * backx + tany * backy < 0) { tanx = -tanx; tany = -tany; }
 
-            if (inDanger) {
-                // 真正面に近いほど左右どちらに逃げるか安定させる
-                let side = lateral >= 0 ? 1 : -1;
-                if (Math.abs(lateral) < 1) side = (Math.floor(this.rect.x) % 2 === 0) ? 1 : -1;
-                // 横移動を主体に、少しだけ接近を混ぜる
-                mvx = perpx * side + (dx / dist) * 0.35;
-                mvy = perpy * side + (dy / dist) * 0.35;
+                // 前方度が高いほど接線（周回）を強く、側面に来たら接近へ移行
+                const t = (forwardness - FLANK_THRESHOLD) / (1 - FLANK_THRESHOLD); // 0〜1
+                const w = t * FLANK_STRENGTH;
+                mvx = inx * (1 - w) + tanx * w;
+                mvy = iny * (1 - w) + tany * w;
                 const m = Math.hypot(mvx, mvy) || 1;
                 mvx /= m; mvy /= m;
             }

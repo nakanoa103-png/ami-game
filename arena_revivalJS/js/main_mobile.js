@@ -9,8 +9,10 @@ const SAME_LINE_TOL     = 0.55;    // 「同じ行/列」判定の許容（×TIL
 const KNOCKBACK_DIST        = 14;  // 敵を弾く距離(px)
 const PLAYER_KNOCKBACK_DIST = 20;  // 被弾時に自分が反対方向へ飛ぶ距離(px)
 const BOOTS_MAX_STACK   = 4;       // ③ブーツ加速の上限（壁抜け防止）
-const CHARGE_AVOID_RANGE = 4 * 16; // 正面突撃回避を始める距離(px)
-const CHARGE_AVOID_WIDTH = 1.2 * 16;// 「剣の延長線上」とみなす横幅(px)
+// 回り込みAI: 正面にいる敵は弧を描いて背後・側面へ回り込む
+const FLANK_RANGE     = 6 * 16;   // 回り込みを始める距離(px)。これより遠いと直進
+const FLANK_THRESHOLD = -0.2;     // 前方度がこれを超えたら回り込む(-1背後〜+1正面)
+const FLANK_STRENGTH  = 0.92;     // 真正面での横回り込みの強さ(0直進〜1完全周回)
 
 let canvas, ctx, logi, lctx;
 let tilemap, player, wave;
