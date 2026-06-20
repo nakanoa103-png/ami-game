@@ -72,6 +72,26 @@ class EnemyMobile {
         return true;
     }
 
+    // pushDir 方向へ弾き飛ばす（壁で停止）
+    knockback(pushDir, distance = KNOCKBACK_DIST) {
+        const [dx, dy] = pushDir;
+        for (let i = 0; i < distance; i++) {
+            const nx = this.rect.x + dx;
+            const ny = this.rect.y + dy;
+            if (this.tilemap.isWallRect(new Rect(nx, ny, S.TILE, S.TILE))) break;
+            this.rect.x = nx;
+            this.rect.y = ny;
+        }
+    }
+
+    // ① 押し合い用: 軸ごとに壁判定して少しずらす
+    pushAway(dx, dy) {
+        const nx = this.rect.x + dx;
+        const ny = this.rect.y + dy;
+        if (!this.tilemap.isWallRect(new Rect(nx, this.rect.y, S.TILE, S.TILE))) this.rect.x = nx;
+        if (!this.tilemap.isWallRect(new Rect(this.rect.x, ny, S.TILE, S.TILE))) this.rect.y = ny;
+    }
+
     draw(ctx) {
         if (!this.alive) return;
         if (this.invincible === 0 || Math.floor(this.invincible / 3) % 2 !== 0) {

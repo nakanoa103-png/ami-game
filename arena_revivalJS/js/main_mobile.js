@@ -6,6 +6,8 @@ const LOGI_W = 320, LOGI_H = 240, SCALE = 2;
 const LOOK_AWAY_CHANCE  = 0.008;   // 毎フレームのよそ見開始確率
 const LOOK_AWAY_FRAMES  = 90;      // よそ見継続フレーム数
 const SAME_LINE_TOL     = 0.55;    // 「同じ行/列」判定の許容（×TILE）
+const KNOCKBACK_DIST    = 12;      // ②ノックバックの距離(px)
+const BOOTS_MAX_STACK   = 4;       // ③ブーツ加速の上限（壁抜け防止）
 
 let canvas, ctx, logi, lctx;
 let tilemap, player, wave;
@@ -67,6 +69,7 @@ function init() {
     assets.load('potion',     'assets/images/potion.png',     '#00CC66');
     assets.load('armor',      'assets/images/armor.png',      '#4488FF');
     assets.load('boots',      'assets/images/boots.png',      '#00BBFF');
+    assets.load('sword',      'assets/images/sword.png',      '#FFFFFF');
 
     initTouchControls();
     _resetGame();

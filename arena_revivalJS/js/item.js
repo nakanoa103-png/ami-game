@@ -39,5 +39,8 @@ class SwordPowerup extends Item {
 
 class Boots extends Item {
     constructor(tileX, tileY) { super(tileX, tileY, 'boots'); }
-    onPickup(player) { player.hasBoots = true; }
+    onPickup(player) {
+        player.hasBoots   = true;                         // PC版（単発）互換
+        player.bootsCount = (player.bootsCount || 0) + 1; // スマホ版（重ねがけ）
+    }
 }

@@ -97,9 +97,12 @@ class WaveManagerMobile {
     }
 
     _updateActive(player) {
-        for (const e of this.enemies) {
-            e.update(player.rect);
+        for (const e of this.enemies) e.update(player.rect);
 
+        // ① 敵同士の押し合い（重なり解消）→ かたまりが崩れて多方向から来る
+        this._separateEnemies();
+
+        for (const e of this.enemies) {
             if (e.alive && e.rect.shrink(3).collides(player.rect.shrink(3))) {
                 this._resolveContact(player, e);
             }
@@ -118,19 +121,47 @@ class WaveManagerMobile {
         }
     }
 
-    // 接触瞬間に両者の向きを同時判定して4分岐
+    // ① 敵同士が重ならないよう押し合う
+    _separateEnemies() {
+        const list = this.enemies.filter(e => e.alive);
+        const minDist = S.TILE * 0.9;
+        for (let i = 0; i < list.length; i++) {
+            for (let j = i + 1; j < list.length; j++) {
+                const a = list[i], b = list[j];
+                let dx = b.rect.centerX - a.rect.centerX;
+                let dy = b.rect.centerY - a.rect.centerY;
+                let dist = Math.hypot(dx, dy);
+                if (dist === 0) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; dist = Math.hypot(dx, dy) || 1; }
+                if (dist < minDist) {
+                    const push = (minDist - dist) / 2;
+                    const ux = dx / dist, uy = dy / dist;
+                    a.pushAway(-ux * push, -uy * push);
+                    b.pushAway( ux * push,  uy * push);
+                }
+            }
+        }
+    }
+
+    // ② 接触瞬間に両者の向きを判定して4分岐（剣ヒット中は無敵）
     _resolveContact(player, enemy) {
-        const playerHits = isFacingTarget(player, enemy);
-        const enemyHits  = isFacingTarget(enemy,  player);
+        const playerHits = isFacingTarget(player, enemy);  // 剣が敵に届いている
+        const enemyHits  = isFacingTarget(enemy,  player); // 敵の攻撃が自分に届いている
 
         if (playerHits) {
-            enemy.takeHit();
-        }
-        if (enemyHits) {
-            player.takeDamage(1, enemy.facing);
+            // 剣ヒット: この敵からはダメージを受けない（剣で防御）
+            if (enemy.takeHit()) {
+                enemy.knockback(player.facing, KNOCKBACK_DIST);   // 敵を前方へ弾く
+            }
+            if (enemyHits) {
+                // 相打ち（正面衝突）→ 自分も後退（ダメージは無し）
+                player.knockback([-player.facing[0], -player.facing[1]], KNOCKBACK_DIST);
+            }
+            // playerHits && !enemyHits → 相手だけノックバック（上で実施済み）
+        } else if (enemyHits) {
+            // こちらだけ攻撃された → 自分だけダメージ＆ノックバック
+            player.takeDamage(1, enemy.facing);   // enemy.facing 方向へ弾かれる（_applyHitEffect内）
         }
         // 両方false → 横すれ違い、ノーダメージ
-        // 両方true  → 正面衝突、相互ダメージ（それぞれ無敵時間で1回に絞られる）
     }
 
     get isBanner() { return this._state === WS_M.BANNER; }
