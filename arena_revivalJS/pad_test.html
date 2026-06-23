@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>スライド式バーチャルパッド 最小テスト</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:#111;overflow:hidden;touch-action:none;}
+  #screen{display:block;width:100vw;height:100dvh;}
+  #hud{
+    position:fixed;top:8px;left:10px;
+    color:#9fe;font:12px/1.5 monospace;
+    text-shadow:0 0 3px #000;pointer-events:none;white-space:pre;
+  }
+</style>
+</head>
+<body>
+<canvas id="screen"></canvas>
+<div id="hud"></div>
+<script>
+(() => {
+  // ── 調整パラメータ ──────────────────────────────────
+  const SPEED        = 3;     // 一定速度(px/frame)
+  const MAX_R        = 60;    // パッド最大半径(px)。スティックはここでクランプ
+  const DEAD         = 14;    // デッドゾーン(px)。これ未満は停止
+  const SWITCH_RATIO = 1.4;   // ヒステリシス: 軸を切り替えるのに必要な比(大小2しきい値=1/1.4と1.4)
+
+  const canvas = document.getElementById('screen');
+  const ctx    = canvas.getContext('2d');
+  const hud    = document.getElementById('hud');
+
+  let W = 0, H = 0;
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener('resize', resize); resize();
+
+  // ── キャラ状態 ──────────────────────────────────────
+  const player = { x: 0, y: 0, facing: 'D' };   // facing: 'L''R''U''D'
+  player.x = W / 2; player.y = H / 2;
+
+  // ── 入力共通: スティックベクトル ───────────────────
+  // pad: タッチ/マウスのダイナミックパッド
+  const pad  = { active:false, cx:0, cy:0, sx:0, sy:0, src:'' };
+  const keys = {};
+
+  // ヒステリシス用に「現在の主軸」を保持（H=水平, V=垂直）
+  let axis = 'H';
+  let moveDir = null;   // 'L''R''U''D' or null(停止)
+
+  const DIR_VEC = { L:[-1,0], R:[1,0], U:[0,-1], D:[0,1] };
+
+  // 4方向スナップ＋シュミットトリガ（斜めのチラつき防止）
+  function snapDir(vx, vy) {
+    const m = Math.hypot(vx, vy);
+    if (m < DEAD) return null;             // デッドゾーン→停止
+    const ax = Math.abs(vx), ay = Math.abs(vy);
+    // 現在軸から別軸へは「比 SWITCH_RATIO 超」でのみ切替（間は現状維持＝ヒステリシス）
+    if (axis === 'H') { if (ay > ax * SWITCH_RATIO) axis = 'V'; }
+    else              { if (ax > ay * SWITCH_RATIO) axis = 'H'; }
+    if (axis === 'H') return vx >= 0 ? 'R' : 'L';
+    else              return vy >= 0 ? 'D' : 'U';
+  }
+
+  // 現在の入力ベクトルを取得（pad優先、なければキーボード）
+  function currentVec() {
+    if (pad.active) {
+      let vx = pad.sx - pad.cx, vy = pad.sy - pad.cy;
+      const m = Math.hypot(vx, vy);
+      if (m > MAX_R) { vx = vx / m * MAX_R; vy = vy / m * MAX_R; }  // クランプ
+      return { vx, vy, src: pad.src };
+    }
+    const kx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+    const ky = (keys.down  ? 1 : 0) - (keys.up   ? 1 : 0);
+    if (kx || ky) return { vx: kx * MAX_R, vy: ky * MAX_R, src: 'keyboard' };
+    return { vx: 0, vy: 0, src: 'none' };
+  }
+
+  // ── 経路①: キーボード ──────────────────────────────
+  const KEYMAP = {
+    ArrowLeft:'left', KeyA:'left', ArrowRight:'right', KeyD:'right',
+    ArrowUp:'up', KeyW:'up', ArrowDown:'down', KeyS:'down',
+  };
+  addEventListener('keydown', e => { if (KEYMAP[e.code]) { keys[KEYMAP[e.code]] = true; e.preventDefault(); } });
+  addEventListener('keyup',   e => { if (KEYMAP[e.code]) { keys[KEYMAP[e.code]] = false; e.preventDefault(); } });
+
+  // ── パッド共通ハンドラ（②③が呼ぶ）──────────────────
+  function padStart(x, y, src) { pad.active = true; pad.cx = x; pad.cy = y; pad.sx = x; pad.sy = y; pad.src = src; }
+  function padMove(x, y)       { if (pad.active) { pad.sx = x; pad.sy = y; } }
+  function padEnd()            { pad.active = false; }
+
+  const pt = e => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+  const ptT = t => { const r = canvas.getBoundingClientRect(); return [t.clientX - r.left, t.clientY - r.top]; }
+
+  // ── 経路②: タッチ（触れた点を中心とするダイナミックパッド）──
+  canvas.addEventListener('touchstart', e => { e.preventDefault(); const [x,y]=ptT(e.changedTouches[0]); padStart(x,y,'touch'); }, {passive:false});
+  canvas.addEventListener('touchmove',  e => { e.preventDefault(); const [x,y]=ptT(e.changedTouches[0]); padMove(x,y); }, {passive:false});
+  canvas.addEventListener('touchend',   e => { e.preventDefault(); padEnd(); }, {passive:false});
+  canvas.addEventListener('touchcancel',e => { e.preventDefault(); padEnd(); }, {passive:false});
+
+  // ── 経路③: マウスドラッグ（②と同挙動・PC確認用）──
+  canvas.addEventListener('mousedown', e => { const [x,y]=pt(e); padStart(x,y,'mouse'); });
+  addEventListener('mousemove', e => { const [x,y]=pt(e); padMove(x,y); });
+  addEventListener('mouseup',   () => padEnd());
+
+  // ── ループ ──────────────────────────────────────────
+  function loop() {
+    requestAnimationFrame(loop);
+
+    const { vx, vy, src } = currentVec();
+    moveDir = snapDir(vx, vy);
+
+    if (moveDir) {
+      const [dx, dy] = DIR_VEC[moveDir];
+      player.x += dx * SPEED;
+      player.y += dy * SPEED;
+      player.facing = moveDir;            // 動いた方向へ向く
+      player.x = Math.max(16, Math.min(W - 16, player.x));
+      player.y = Math.max(16, Math.min(H - 16, player.y));
+    }
+
+    draw(vx, vy, src);
+  }
+
+  // ── 描画 ────────────────────────────────────────────
+  function drawPlayer() {
+    const ang = { R:0, D:Math.PI/2, L:Math.PI, U:-Math.PI/2 }[player.facing];
+    ctx.save();
+    ctx.translate(player.x, player.y);
+    // 体（四角）
+    ctx.fillStyle = '#dde';
+    ctx.fillRect(-7, -7, 14, 14);
+    // 向き：▲（facing方向を指す）＋ 剣の刃
+    ctx.rotate(ang);
+    ctx.fillStyle = '#5f8';
+    ctx.beginPath();
+    ctx.moveTo(14, 0); ctx.lineTo(4, -6); ctx.lineTo(4, 6); ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#9ff'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(22, 0); ctx.stroke();  // 剣
+    ctx.restore();
+  }
+
+  function drawPad(vx, vy) {
+    if (!pad.active) return;
+    // 外周（最大半径）
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(pad.cx, pad.cy, MAX_R, 0, Math.PI*2); ctx.stroke();
+    // デッドゾーン
+    ctx.strokeStyle = 'rgba(255,120,120,0.4)';
+    ctx.beginPath(); ctx.arc(pad.cx, pad.cy, DEAD, 0, Math.PI*2); ctx.stroke();
+    // 中心
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath(); ctx.arc(pad.cx, pad.cy, 5, 0, Math.PI*2); ctx.fill();
+    // 中心→スティックの線
+    const sx = pad.cx + vx, sy = pad.cy + vy;
+    ctx.strokeStyle = 'rgba(120,255,180,0.7)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(pad.cx, pad.cy); ctx.lineTo(sx, sy); ctx.stroke();
+    // スティック位置
+    ctx.fillStyle = '#5f8';
+    ctx.beginPath(); ctx.arc(sx, sy, 16, 0, Math.PI*2); ctx.fill();
+  }
+
+  function draw(vx, vy, src) {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#141420';
+    ctx.fillRect(0, 0, W, H);
+
+    drawPad(vx, vy);
+    drawPlayer();
+
+    const mag = Math.hypot(vx, vy).toFixed(0);
+    hud.textContent =
+      `入力: ${src}\n` +
+      `方向: ${moveDir || '停止'}   主軸: ${axis}\n` +
+      `ベクトル: (${vx.toFixed(0)}, ${vy.toFixed(0)})  |v|=${mag}\n` +
+      `操作: キー(矢印/WASD) / 画面をドラッグ\n` +
+      `デッドゾーン<${DEAD}  切替比 ${SWITCH_RATIO}`;
+  }
+
+  loop();
+})();
+</script>
+</body>
+</html>
