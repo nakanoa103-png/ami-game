@@ -27,8 +27,8 @@
 
 // ===== 基本設定 =====
 const GW = 400, GH = 700;          // ゲーム内固定座標系
-const POWER_MAX = 4;
-const PCOUNT_1UP = 100;
+const POWER_MAX = 10;
+const PCOUNT_1UP = 20;
 
 const cv  = document.getElementById("game");
 const ctx = cv.getContext("2d");
@@ -133,22 +133,31 @@ function gameOver() {
 }
 
 // ===== 入力（ドラッグ相対移動）=====
-let touching = false, lastX = 0, lastY = 0;
+// 手のひらや別指の誤タッチ、OSの端スワイプ等で複数ポインタが同時発生しても
+// 最初に触れた1本だけを追従対象にする（でないと基準座標が入れ替わりワープする）
+let touching = false, lastX = 0, lastY = 0, activePointerId = null;
 addEventListener("pointerdown", e => {
   initAudio();
+  if (activePointerId !== null) return; // 既に追従中の指がある間は無視
+  activePointerId = e.pointerId;
   touching = true; lastX = e.clientX; lastY = e.clientY;
   if (state === "title") gameStart();
   else if (state === "over" && overT > 0.8) gameStart();
 });
 addEventListener("pointermove", e => {
+  if (e.pointerId !== activePointerId) return;
   if (!touching || state !== "play") { lastX = e.clientX; lastY = e.clientY; return; }
   const k = 1.7; // 指の移動量に対する自機の移動倍率
   player.x = clamp(player.x + (e.clientX - lastX) / scale * k, 14, GW - 14);
   player.y = clamp(player.y + (e.clientY - lastY) / scale * k, 40, GH - 16);
   lastX = e.clientX; lastY = e.clientY;
 });
-addEventListener("pointerup",     () => touching = false);
-addEventListener("pointercancel", () => touching = false);
+function releasePointer(e) {
+  if (e.pointerId !== activePointerId) return;
+  touching = false; activePointerId = null;
+}
+addEventListener("pointerup", releasePointer);
+addEventListener("pointercancel", releasePointer);
 
 // ===== 生成系 =====
 function boomAt(x, y, col, n, big) {
@@ -221,7 +230,7 @@ function killEnemy(e) {
 function hitPlayer() {
   if (player.inv > 0) return;
   lives--;
-  player.pw = 1;
+  player.pw = Math.max(1, Math.floor(player.pw / 2)); // 全ロスだと痛すぎるので半減に緩和
   boomAt(player.x, player.y, "#8df", 30, true);
   sndHit();
   if (lives <= 0) gameOver();
@@ -240,14 +249,27 @@ function shotAngles(pw) {
   return angles;
 }
 
+// pw1-4: 前方の扇が育つ（従来通り）
+// pw5以降: 右・左・後ろに順番に追加、pw8で計4発(右1+左1+後ろ2)揃う
+// pw9-10: 前方の扇がさらに育つ
+function shotList(pw) {
+  const forwardCount = pw <= 4 ? pw : pw <= 8 ? 4 : pw - 4;
+  const angles = shotAngles(forwardCount);
+  if (pw >= 5) angles.push(Math.PI / 2);        // 右
+  if (pw >= 6) angles.push(-Math.PI / 2);       // 左
+  if (pw === 7) angles.push(Math.PI);           // 後ろ（単発）
+  if (pw >= 8) angles.push(Math.PI - 0.35, Math.PI + 0.35); // 後ろを2発の扇に
+  return angles;
+}
+
 function updatePlayer(dt) {
   player.inv = Math.max(0, player.inv - dt);
   player.cool -= dt;
   if (player.cool <= 0) {
     player.cool = 0.12 + (player.pw - 1) * 0.014; // 高パワーほど連射間隔を伸ばす
-    for (const a of shotAngles(player.pw)) {
+    for (const a of shotList(player.pw)) {
       const b = pBul.get();
-      b.x = player.x; b.y = player.y - 14;
+      b.x = player.x + Math.sin(a) * 10; b.y = player.y - Math.cos(a) * 10;
       b.vx = Math.sin(a) * 540; b.vy = -Math.cos(a) * 540; b.r = 4;
     }
     sndShot();
@@ -276,7 +298,7 @@ function updateEntities(dt) {
   for (const b of pBul.items) {
     if (!b.active) continue;
     b.x += b.vx * dt; b.y += b.vy * dt;
-    if (b.y < -20 || b.x < -20 || b.x > GW + 20) b.active = false;
+    if (b.y < -20 || b.y > GH + 20 || b.x < -20 || b.x > GW + 20) b.active = false;
   }
   for (const b of eBul.items) {
     if (!b.active) continue;
