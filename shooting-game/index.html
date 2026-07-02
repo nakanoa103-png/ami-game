@@ -5,18 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>STAR STRIKER</title>
-<meta name="description" content="スマホで遊べるブラウザ縦シューティング「STAR STRIKER」。ドラッグで移動、ショットはオート。">
-<meta property="og:type" content="website">
-<meta property="og:title" content="STAR STRIKER">
-<meta property="og:description" content="スマホで遊べるブラウザ縦シューティング。ドラッグで移動、ショットはオート。">
-<meta property="og:url" content="https://nakanoa103-png.github.io/ami-game/shooting-game/">
-<meta property="og:image" content="https://nakanoa103-png.github.io/ami-game/shooting-game/shooting-social-preview.jpg">
-<meta property="og:image:width" content="1280">
-<meta property="og:image:height" content="640">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="STAR STRIKER">
-<meta name="twitter:description" content="スマホで遊べるブラウザ縦シューティング。ドラッグで移動、ショットはオート。">
-<meta name="twitter:image" content="https://nakanoa103-png.github.io/ami-game/shooting-game/shooting-social-preview.jpg">
 <style>
   html, body {
     margin: 0; padding: 0;
@@ -41,6 +29,7 @@
 const GW = 400, GH = 700;          // ゲーム内固定座標系
 const POWER_MAX = 10;
 const PCOUNT_1UP = 20;
+const SHIELD_MAX = 3;
 
 const cv  = document.getElementById("game");
 const ctx = cv.getContext("2d");
@@ -110,6 +99,7 @@ const sndBoom  = () => beep(160, 0.25, "sawtooth", 0.10,  40);
 const sndBig   = () => beep(90,  0.45, "sawtooth", 0.14,  30);
 const sndItem  = () => { beep(660, 0.08, "square", 0.06); setTimeout(() => beep(990, 0.12, "square", 0.06), 80); };
 const sndHit   = () => beep(220, 0.35, "square",   0.12,  55);
+const sndShieldBreak = () => beep(500, 0.25, "triangle", 0.12, 1200);
 
 // ===== ゲーム状態 =====
 let state = "title";   // title / play / over
@@ -118,7 +108,7 @@ let elapsed = 0, diff = 1, spawnT = 0, overT = 0, blinkT = 0;
 
 try { hiscore = parseInt(localStorage.getItem("stg_hiscore")) || 0; } catch (e) {}
 
-const player = { x: GW / 2, y: GH - 90, pw: 1, cool: 0, inv: 0, r: 5, pcount: 0 };
+const player = { x: GW / 2, y: GH - 90, pw: 1, cool: 0, inv: 0, r: 5, pcount: 0, shield: 0 };
 
 // 背景の星（2層パララックス）
 const stars = [];
@@ -132,7 +122,7 @@ function gameStart() {
   pBul.clear(); eBul.clear(); enemies.clear(); items.clear(); parts.clear();
   score = 0; lives = 3; elapsed = 0; diff = 1; spawnT = 0.8;
   player.x = GW / 2; player.y = GH - 90;
-  player.pw = 1; player.cool = 0; player.inv = 1.5; player.pcount = 0;
+  player.pw = 1; player.cool = 0; player.inv = 1.5; player.pcount = 0; player.shield = 0;
   state = "play";
 }
 
@@ -223,9 +213,9 @@ function enemyFire(e) {
   }
 }
 
-function dropItem(x, y) {
+function dropItem(x, y, type) {
   const it = items.get();
-  it.x = x; it.y = y; it.r = 12; it.t = 0;
+  it.x = x; it.y = y; it.r = 12; it.t = 0; it.type = type;
 }
 
 function killEnemy(e) {
@@ -235,12 +225,22 @@ function killEnemy(e) {
   score += pts;
   boomAt(e.x, e.y, big ? "#fa4" : "#f66", big ? 26 : 14, big);
   big ? sndBig() : sndBoom();
-  const dropRate = e.type === "tank" ? 1 : e.type === "shooter" ? 0.3 : 0.05;
-  if (Math.random() < dropRate) dropItem(e.x, e.y);
+  const shieldRate = e.type === "tank" ? 0.12 : e.type === "shooter" ? 0.04 : 0;
+  const dropRate   = e.type === "tank" ? 1    : e.type === "shooter" ? 0.3  : 0.05;
+  if (shieldRate > 0 && Math.random() < shieldRate) dropItem(e.x, e.y, "shield");
+  else if (Math.random() < dropRate) dropItem(e.x, e.y, "power");
 }
 
 function hitPlayer() {
   if (player.inv > 0) return;
+  if (player.shield > 0) { // バリアがあれば1枚消費してライフ・PWは減らさない
+    player.shield--;
+    enemies.clear(); eBul.clear(); pBul.clear();
+    boomAt(player.x, player.y, "#6cf", 30, true);
+    sndShieldBreak();
+    player.inv = 2;
+    return;
+  }
   lives--;
   player.pw = Math.max(1, player.pw - 2);
   enemies.clear(); eBul.clear(); pBul.clear(); // 被弾時は画面をクリアして仕切り直す
@@ -373,13 +373,19 @@ function collide() {
     if (!it.active) continue;
     if (hitCircle(it.x, it.y, it.r + 14, player.x, player.y, player.r)) {
       it.active = false;
-      sndItem();
-      if (player.pw < POWER_MAX) player.pw++;
-      player.pcount++; // PWが上限かどうかに関わらず取得数を積み上げる
-      if (player.pcount >= PCOUNT_1UP) {
-        player.pcount = 0;
-        lives++;
-        sndBig();
+      if (it.type === "shield") {
+        sndItem();
+        if (player.shield < SHIELD_MAX) player.shield++;
+        else score += 300;
+      } else {
+        sndItem();
+        if (player.pw < POWER_MAX) player.pw++;
+        player.pcount++; // PWが上限かどうかに関わらず取得数を積み上げる
+        if (player.pcount >= PCOUNT_1UP) {
+          player.pcount = 0;
+          lives++;
+          sndBig();
+        }
       }
     }
   }
@@ -465,12 +471,12 @@ function draw() {
   // アイテム
   for (const it of items.items) {
     if (!it.active) continue;
-    ctx.fillStyle = "#3f6";
+    ctx.fillStyle = it.type === "shield" ? "#6cf" : "#3f6";
     ctx.beginPath(); ctx.arc(it.x, it.y, it.r, 0, 6.29); ctx.fill();
     ctx.fillStyle = "#020208";
     ctx.font = "bold 14px monospace";
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText("P", it.x, it.y + 1);
+    ctx.fillText(it.type === "shield" ? "S" : "P", it.x, it.y + 1);
   }
 
   for (const e of enemies.items) if (e.active) drawEnemy(e);
@@ -524,6 +530,10 @@ function draw() {
     ctx.fillText("PW " + "▮".repeat(player.pw) + "▯".repeat(POWER_MAX - player.pw), 10, 48);
     ctx.fillStyle = "#fc6";
     ctx.fillText("1UP " + player.pcount + "/" + PCOUNT_1UP, 10, 68);
+    if (player.shield > 0) {
+      ctx.fillStyle = "#6cf";
+      ctx.fillText("SHIELD " + "🛡".repeat(player.shield), 10, 88);
+    }
   }
 
   // 画面オーバーレイ
