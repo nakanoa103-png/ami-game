@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>STAR STRIKER</title>
+<style>
+  html, body {
+    margin: 0; padding: 0;
+    width: 100%; height: 100%;
+    background: #000;
+    overflow: hidden;
+    position: fixed;
+    touch-action: none;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+  }
+  body { display: flex; align-items: center; justify-content: center; }
+  #game { display: block; background: #020208; touch-action: none; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+"use strict";
+
+// ===== 基本設定 =====
+const GW = 400, GH = 700;          // ゲーム内固定座標系
+const POWER_MAX = 4;
+
+const cv  = document.getElementById("game");
+const ctx = cv.getContext("2d");
+let scale = 1;
+
+function resize() {
+  const s = Math.min(innerWidth / GW, innerHeight / GH);
+  const dpr = window.devicePixelRatio || 1;
+  scale = s;
+  cv.style.width  = (GW * s) + "px";
+  cv.style.height = (GH * s) + "px";
+  cv.width  = Math.round(GW * s * dpr);
+  cv.height = Math.round(GH * s * dpr);
+  ctx.setTransform(s * dpr, 0, 0, s * dpr, 0, 0);
+}
+addEventListener("resize", resize);
+addEventListener("orientationchange", resize);
+resize();
+
+// iOSのピンチズーム抑止
+document.addEventListener("gesturestart", e => e.preventDefault());
+document.addEventListener("contextmenu",  e => e.preventDefault());
+
+const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
+
+// ===== オブジェクトプール（GCによるカクつき防止）=====
+function makePool(create) {
+  const items = [];
+  return {
+    items,
+    get() {
+      for (const it of items) if (!it.active) { it.active = true; return it; }
+      const it = create(); it.active = true; items.push(it); return it;
+    },
+    clear() { for (const it of items) it.active = false; }
+  };
+}
+const pBul    = makePool(() => ({}));  // 自機弾
+const eBul    = makePool(() => ({}));  // 敵弾
+const enemies = makePool(() => ({}));
+const items   = makePool(() => ({}));  // パワーアップ
+const parts   = makePool(() => ({}));  // パーティクル
+
+// ===== サウンド（Web Audio・素材レス）=====
+let AC = null;
+function initAudio() {
+  if (!AC) {
+    const C = window.AudioContext || window.webkitAudioContext;
+    if (C) AC = new C();
+  }
+  if (AC && AC.state === "suspended") AC.resume();
+}
+function beep(freq, dur, type, vol, slideTo) {
+  if (!AC || AC.state !== "running") return;
+  const t = AC.currentTime;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, t);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(30, slideTo), t + dur);
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(AC.destination);
+  o.start(t); o.stop(t + dur);
+}
+const sndShot  = () => beep(880, 0.05, "square",   0.015, 440);
+const sndBoom  = () => beep(160, 0.25, "sawtooth", 0.10,  40);
+const sndBig   = () => beep(90,  0.45, "sawtooth", 0.14,  30);
+const sndItem  = () => { beep(660, 0.08, "square", 0.06); setTimeout(() => beep(990, 0.12, "square", 0.06), 80); };
+const sndHit   = () => beep(220, 0.35, "square",   0.12,  55);
+
+// ===== ゲーム状態 =====
+let state = "title";   // title / play / over
+let score = 0, hiscore = 0, lives = 3;
+let elapsed = 0, diff = 1, spawnT = 0, overT = 0, blinkT = 0;
+
+try { hiscore = parseInt(localStorage.getItem("stg_hiscore")) || 0; } catch (e) {}
+
+const player = { x: GW / 2, y: GH - 90, pw: 1, cool: 0, inv: 0, r: 5 };
+
+// 背景の星（2層パララックス）
+const stars = [];
+for (let i = 0; i < 70; i++) {
+  const layer = Math.random() < 0.6 ? 0 : 1;
+  stars.push({ x: Math.random() * GW, y: Math.random() * GH, layer,
+               spd: layer ? 110 : 35, size: layer ? 1.8 : 1 });
+}
+
+function gameStart() {
+  pBul.clear(); eBul.clear(); enemies.clear(); items.clear(); parts.clear();
+  score = 0; lives = 3; elapsed = 0; diff = 1; spawnT = 0.8;
+  player.x = GW / 2; player.y = GH - 90;
+  player.pw = 1; player.cool = 0; player.inv = 1.5;
+  state = "play";
+}
+
+function gameOver() {
+  state = "over"; overT = 0;
+  if (score > hiscore) {
+    hiscore = score;
+    try { localStorage.setItem("stg_hiscore", String(hiscore)); } catch (e) {}
+  }
+}
+
+// ===== 入力（ドラッグ相対移動）=====
+let touching = false, lastX = 0, lastY = 0;
+addEventListener("pointerdown", e => {
+  initAudio();
+  touching = true; lastX = e.clientX; lastY = e.clientY;
+  if (state === "title") gameStart();
+  else if (state === "over" && overT > 0.8) gameStart();
+});
+addEventListener("pointermove", e => {
+  if (!touching || state !== "play") { lastX = e.clientX; lastY = e.clientY; return; }
+  const k = 1.7; // 指の移動量に対する自機の移動倍率
+  player.x = clamp(player.x + (e.clientX - lastX) / scale * k, 14, GW - 14);
+  player.y = clamp(player.y + (e.clientY - lastY) / scale * k, 40, GH - 16);
+  lastX = e.clientX; lastY = e.clientY;
+});
+addEventListener("pointerup",     () => touching = false);
+addEventListener("pointercancel", () => touching = false);
+
+// ===== 生成系 =====
+function boomAt(x, y, col, n, big) {
+  for (let i = 0; i < n; i++) {
+    const p = parts.get();
+    const a = Math.random() * Math.PI * 2;
+    const sp = (big ? 60 : 40) + Math.random() * (big ? 180 : 120);
+    p.x = x; p.y = y;
+    p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp;
+    p.life = p.max = 0.35 + Math.random() * 0.35;
+    p.size = (big ? 3 : 2) + Math.random() * 3;
+    p.col = col;
+  }
+}
+
+function spawnEnemy(type, x, y) {
+  const e = enemies.get();
+  e.type = type; e.x = x; e.y = y; e.t = Math.random() * 6.28;
+  if (type === "zako")    { e.hp = 1;  e.r = 12; e.vy = (110 + Math.random() * 50) * diff; e.ft = 99; }
+  if (type === "shooter") { e.hp = 3;  e.r = 14; e.vy = 65 * diff; e.ft = 1.0 + Math.random(); }
+  if (type === "tank")    { e.hp = 12; e.r = 24; e.vy = 38 * diff; e.ft = 1.5; }
+}
+
+function spawner(dt) {
+  spawnT -= dt;
+  if (spawnT > 0) return;
+  spawnT = 1.15 / diff;
+  const r = Math.random();
+  if (elapsed > 25 && r < 0.10) {
+    spawnEnemy("tank", 60 + Math.random() * (GW - 120), -40);
+  } else if (r < 0.40) {
+    const n = 1 + (Math.random() < 0.4 ? 1 : 0);
+    for (let i = 0; i < n; i++)
+      spawnEnemy("shooter", 40 + Math.random() * (GW - 80), -30 - i * 50);
+  } else {
+    const n = 3 + Math.floor(Math.random() * 3);
+    const x = 30 + Math.random() * (GW - 60);
+    for (let i = 0; i < n; i++) spawnEnemy("zako", x, -25 - i * 42);
+  }
+}
+
+function enemyFire(e) {
+  if (e.y < 10 || e.y > GH * 0.75) return;
+  const bs = 150 + Math.min(130, elapsed * 1.2);
+  const base = Math.atan2(player.y - e.y, player.x - e.x);
+  const angles = e.type === "tank" ? [base - 0.35, base, base + 0.35] : [base];
+  for (const a of angles) {
+    const b = eBul.get();
+    b.x = e.x; b.y = e.y; b.r = 5;
+    b.vx = Math.cos(a) * bs; b.vy = Math.sin(a) * bs;
+  }
+}
+
+function dropItem(x, y) {
+  const it = items.get();
+  it.x = x; it.y = y; it.r = 12; it.t = 0;
+}
+
+function killEnemy(e) {
+  e.active = false;
+  const pts  = e.type === "tank" ? 800 : e.type === "shooter" ? 300 : 100;
+  const big  = e.type === "tank";
+  score += pts;
+  boomAt(e.x, e.y, big ? "#fa4" : "#f66", big ? 26 : 14, big);
+  big ? sndBig() : sndBoom();
+  const dropRate = e.type === "tank" ? 1 : e.type === "shooter" ? 0.3 : 0.05;
+  if (Math.random() < dropRate) dropItem(e.x, e.y);
+}
+
+function hitPlayer() {
+  if (player.inv > 0) return;
+  lives--;
+  player.pw = Math.max(1, player.pw - 1);
+  boomAt(player.x, player.y, "#8df", 30, true);
+  sndHit();
+  if (lives <= 0) gameOver();
+  else player.inv = 2;
+}
+
+// ===== 更新 =====
+function updatePlayer(dt) {
+  player.inv = Math.max(0, player.inv - dt);
+  player.cool -= dt;
+  if (player.cool <= 0) {
+    player.cool = 0.13;
+    const offs = [[0], [-7, 7], [-12, 0, 12], [-16, -5, 5, 16]][player.pw - 1];
+    for (const off of offs) {
+      const b = pBul.get();
+      b.x = player.x + off; b.y = player.y - 14;
+      b.vx = 0; b.vy = -540; b.r = 4;
+    }
+    sndShot();
+  }
+}
+
+function updateEntities(dt) {
+  const playing = state === "play";
+
+  for (const e of enemies.items) {
+    if (!e.active) continue;
+    e.t += dt;
+    e.y += e.vy * dt;
+    if (e.type === "zako") e.x += Math.sin(e.t * 3) * 70 * dt;
+    e.x = clamp(e.x, e.r, GW - e.r);
+    if (playing) {
+      e.ft -= dt;
+      if (e.ft <= 0) {
+        e.ft = (e.type === "tank" ? 2.0 : 1.7) / diff;
+        enemyFire(e);
+      }
+    }
+    if (e.y > GH + 50) e.active = false;
+  }
+
+  for (const b of pBul.items) {
+    if (!b.active) continue;
+    b.y += b.vy * dt;
+    if (b.y < -20) b.active = false;
+  }
+  for (const b of eBul.items) {
+    if (!b.active) continue;
+    b.x += b.vx * dt; b.y += b.vy * dt;
+    if (b.x < -20 || b.x > GW + 20 || b.y < -20 || b.y > GH + 20) b.active = false;
+  }
+  for (const it of items.items) {
+    if (!it.active) continue;
+    it.t += dt;
+    it.y += 90 * dt;
+    it.x += Math.sin(it.t * 2.5) * 30 * dt;
+    if (it.y > GH + 30) it.active = false;
+  }
+  for (const p of parts.items) {
+    if (!p.active) continue;
+    p.life -= dt;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vx *= 0.96; p.vy *= 0.96;
+    if (p.life <= 0) p.active = false;
+  }
+}
+
+function hitCircle(ax, ay, ar, bx, by, br) {
+  const dx = ax - bx, dy = ay - by, rr = ar + br;
+  return dx * dx + dy * dy < rr * rr;
+}
+
+function collide() {
+  // 自機弾 vs 敵
+  for (const b of pBul.items) {
+    if (!b.active) continue;
+    for (const e of enemies.items) {
+      if (!e.active) continue;
+      if (hitCircle(b.x, b.y, b.r, e.x, e.y, e.r)) {
+        b.active = false;
+        e.hp--;
+        if (e.hp <= 0) killEnemy(e);
+        else boomAt(b.x, b.y, "#ff8", 3, false);
+        break;
+      }
+    }
+  }
+  // 敵弾・敵本体 vs 自機
+  for (const b of eBul.items) {
+    if (!b.active) continue;
+    if (hitCircle(b.x, b.y, b.r, player.x, player.y, player.r)) {
+      b.active = false; hitPlayer();
+    }
+  }
+  for (const e of enemies.items) {
+    if (!e.active) continue;
+    if (hitCircle(e.x, e.y, e.r * 0.8, player.x, player.y, player.r)) {
+      if (e.type === "zako") killEnemy(e);
+      hitPlayer();
+    }
+  }
+  // アイテム取得（取得判定は広め）
+  for (const it of items.items) {
+    if (!it.active) continue;
+    if (hitCircle(it.x, it.y, it.r + 14, player.x, player.y, player.r)) {
+      it.active = false;
+      sndItem();
+      if (player.pw < POWER_MAX) player.pw++;
+      else score += 500;
+    }
+  }
+}
+
+function update(dt) {
+  blinkT += dt;
+  for (const s of stars) {
+    s.y += s.spd * dt;
+    if (s.y > GH) { s.y -= GH; s.x = Math.random() * GW; }
+  }
+  if (state === "play") {
+    elapsed += dt;
+    diff = 1 + Math.min(1.5, elapsed / 90);
+    updatePlayer(dt);
+    spawner(dt);
+  }
+  if (state !== "title") updateEntities(dt);
+  else updateEntities(dt);   // タイトル中もパーティクル等は流す
+  if (state === "play") collide();
+  if (state === "over") overT += dt;
+}
+
+// ===== 描画 =====
+function drawShip(x, y) {
+  ctx.save();
+  ctx.translate(x, y);
+  // エンジン炎
+  ctx.fillStyle = Math.floor(blinkT * 20) % 2 ? "#f80" : "#fc0";
+  ctx.beginPath();
+  ctx.moveTo(-4, 12); ctx.lineTo(0, 20 + Math.random() * 5); ctx.lineTo(4, 12);
+  ctx.fill();
+  // 機体
+  ctx.fillStyle = "#8df";
+  ctx.beginPath();
+  ctx.moveTo(0, -16); ctx.lineTo(11, 12); ctx.lineTo(0, 6); ctx.lineTo(-11, 12);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(-2, -8, 4, 8);
+  ctx.restore();
+}
+
+function drawEnemy(e) {
+  ctx.save();
+  ctx.translate(e.x, e.y);
+  if (e.type === "zako") {
+    ctx.fillStyle = "#f55";
+    ctx.beginPath();
+    ctx.moveTo(0, -12); ctx.lineTo(10, 0); ctx.lineTo(0, 12); ctx.lineTo(-10, 0);
+    ctx.closePath(); ctx.fill();
+  } else if (e.type === "shooter") {
+    ctx.fillStyle = "#c6f";
+    ctx.beginPath();
+    ctx.moveTo(0, 14); ctx.lineTo(13, 2); ctx.lineTo(8, -12); ctx.lineTo(-8, -12); ctx.lineTo(-13, 2);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#fef";
+    ctx.beginPath(); ctx.arc(0, 0, 4, 0, 6.29); ctx.fill();
+  } else { // tank
+    ctx.fillStyle = "#fa4";
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = i / 6 * Math.PI * 2 + e.t * 0.5;
+      const px = Math.cos(a) * 22, py = Math.sin(a) * 22;
+      i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#822";
+    ctx.beginPath(); ctx.arc(0, 0, 9, 0, 6.29); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function draw() {
+  ctx.fillStyle = "#020208";
+  ctx.fillRect(0, 0, GW, GH);
+
+  // 星
+  for (const s of stars) {
+    ctx.fillStyle = s.layer ? "#9ab" : "#445";
+    ctx.fillRect(s.x, s.y, s.size, s.size);
+  }
+
+  // アイテム
+  for (const it of items.items) {
+    if (!it.active) continue;
+    ctx.fillStyle = "#3f6";
+    ctx.beginPath(); ctx.arc(it.x, it.y, it.r, 0, 6.29); ctx.fill();
+    ctx.fillStyle = "#020208";
+    ctx.font = "bold 14px monospace";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("P", it.x, it.y + 1);
+  }
+
+  for (const e of enemies.items) if (e.active) drawEnemy(e);
+
+  // 自機弾
+  ctx.fillStyle = "#8ff";
+  for (const b of pBul.items)
+    if (b.active) ctx.fillRect(b.x - 2, b.y - 8, 4, 12);
+
+  // 敵弾
+  for (const b of eBul.items) {
+    if (!b.active) continue;
+    ctx.fillStyle = "#f9c";
+    ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 6.29); ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(b.x, b.y, 2, 0, 6.29); ctx.fill();
+  }
+
+  // 自機（無敵中は点滅）
+  if (state === "play" && (player.inv <= 0 || Math.floor(player.inv * 12) % 2 === 0))
+    drawShip(player.x, player.y);
+
+  // パーティクル
+  for (const p of parts.items) {
+    if (!p.active) continue;
+    ctx.globalAlpha = Math.max(0, p.life / p.max);
+    ctx.fillStyle = p.col;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, 6.29); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // HUD
+  ctx.font = "bold 15px monospace";
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "#fff";
+  ctx.textAlign = "left";
+  ctx.fillText("SCORE " + score, 10, 8);
+  ctx.textAlign = "right";
+  ctx.fillText("HI " + hiscore, GW - 10, 8);
+  if (state !== "title") {
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#8df";
+    ctx.fillText("♥".repeat(Math.max(0, lives)), 10, 28);
+    ctx.fillStyle = "#3f6";
+    ctx.fillText("PW " + "▮".repeat(player.pw) + "▯".repeat(POWER_MAX - player.pw), 10, 48);
+  }
+
+  // 画面オーバーレイ
+  ctx.textAlign = "center";
+  if (state === "title") {
+    ctx.fillStyle = "#8df";
+    ctx.font = "bold 40px monospace";
+    ctx.fillText("STAR", GW / 2, GH * 0.28);
+    ctx.fillText("STRIKER", GW / 2, GH * 0.28 + 46);
+    ctx.fillStyle = "#fff";
+    ctx.font = "15px monospace";
+    ctx.fillText("ドラッグで移動・ショットは自動", GW / 2, GH * 0.52);
+    if (Math.floor(blinkT * 2) % 2 === 0) {
+      ctx.font = "bold 20px monospace";
+      ctx.fillText("TAP TO START", GW / 2, GH * 0.65);
+    }
+  } else if (state === "over") {
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.fillRect(0, 0, GW, GH);
+    ctx.fillStyle = "#f66";
+    ctx.font = "bold 36px monospace";
+    ctx.fillText("GAME OVER", GW / 2, GH * 0.34);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 20px monospace";
+    ctx.fillText("SCORE " + score, GW / 2, GH * 0.46);
+    if (score >= hiscore && score > 0)
+      ctx.fillText("★ NEW RECORD ★", GW / 2, GH * 0.52);
+    if (overT > 0.8 && Math.floor(blinkT * 2) % 2 === 0) {
+      ctx.font = "bold 18px monospace";
+      ctx.fillText("TAP TO RESTART", GW / 2, GH * 0.64);
+    }
+  }
+}
+
+// ===== メインループ =====
+let prevT = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - prevT) / 1000); // タブ復帰時の暴走防止
+  prevT = now;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
