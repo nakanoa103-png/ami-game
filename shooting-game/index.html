@@ -27,7 +27,7 @@
 
 // ===== 基本設定 =====
 const GW = 400, GH = 700;          // ゲーム内固定座標系
-const POWER_MAX = 4;
+const POWER_MAX = 8;
 
 const cv  = document.getElementById("game");
 const ctx = cv.getContext("2d");
@@ -220,7 +220,7 @@ function killEnemy(e) {
 function hitPlayer() {
   if (player.inv > 0) return;
   lives--;
-  player.pw = Math.max(1, player.pw - 1);
+  player.pw = 1;
   boomAt(player.x, player.y, "#8df", 30, true);
   sndHit();
   if (lives <= 0) gameOver();
@@ -228,16 +228,26 @@ function hitPlayer() {
 }
 
 // ===== 更新 =====
+function shotAngles(pw) {
+  if (pw === 1) return [0];
+  const halfSpread = 0.07 + (pw - 1) * 0.045; // pwが上がるほど扇が広がる
+  const angles = [];
+  for (let i = 0; i < pw; i++) {
+    const t = (i / (pw - 1)) * 2 - 1; // -1..1
+    angles.push(t * halfSpread);
+  }
+  return angles;
+}
+
 function updatePlayer(dt) {
   player.inv = Math.max(0, player.inv - dt);
   player.cool -= dt;
   if (player.cool <= 0) {
-    player.cool = 0.13;
-    const offs = [[0], [-7, 7], [-12, 0, 12], [-16, -5, 5, 16]][player.pw - 1];
-    for (const off of offs) {
+    player.cool = 0.12 + (player.pw - 1) * 0.014; // 高パワーほど連射間隔を伸ばす
+    for (const a of shotAngles(player.pw)) {
       const b = pBul.get();
-      b.x = player.x + off; b.y = player.y - 14;
-      b.vx = 0; b.vy = -540; b.r = 4;
+      b.x = player.x; b.y = player.y - 14;
+      b.vx = Math.sin(a) * 540; b.vy = -Math.cos(a) * 540; b.r = 4;
     }
     sndShot();
   }
@@ -264,8 +274,8 @@ function updateEntities(dt) {
 
   for (const b of pBul.items) {
     if (!b.active) continue;
-    b.y += b.vy * dt;
-    if (b.y < -20) b.active = false;
+    b.x += b.vx * dt; b.y += b.vy * dt;
+    if (b.y < -20 || b.x < -20 || b.x > GW + 20) b.active = false;
   }
   for (const b of eBul.items) {
     if (!b.active) continue;
@@ -424,10 +434,16 @@ function draw() {
 
   for (const e of enemies.items) if (e.active) drawEnemy(e);
 
-  // 自機弾
+  // 自機弾（進行方向に合わせて回転させる）
   ctx.fillStyle = "#8ff";
-  for (const b of pBul.items)
-    if (b.active) ctx.fillRect(b.x - 2, b.y - 8, 4, 12);
+  for (const b of pBul.items) {
+    if (!b.active) continue;
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.rotate(Math.atan2(b.vy, b.vx) + Math.PI / 2);
+    ctx.fillRect(-2, -6, 4, 12);
+    ctx.restore();
+  }
 
   // 敵弾
   for (const b of eBul.items) {
