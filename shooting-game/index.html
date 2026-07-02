@@ -27,7 +27,8 @@
 
 // ===== 基本設定 =====
 const GW = 400, GH = 700;          // ゲーム内固定座標系
-const POWER_MAX = 8;
+const POWER_MAX = 4;
+const PCOUNT_1UP = 100;
 
 const cv  = document.getElementById("game");
 const ctx = cv.getContext("2d");
@@ -105,7 +106,7 @@ let elapsed = 0, diff = 1, spawnT = 0, overT = 0, blinkT = 0;
 
 try { hiscore = parseInt(localStorage.getItem("stg_hiscore")) || 0; } catch (e) {}
 
-const player = { x: GW / 2, y: GH - 90, pw: 1, cool: 0, inv: 0, r: 5 };
+const player = { x: GW / 2, y: GH - 90, pw: 1, cool: 0, inv: 0, r: 5, pcount: 0 };
 
 // 背景の星（2層パララックス）
 const stars = [];
@@ -119,7 +120,7 @@ function gameStart() {
   pBul.clear(); eBul.clear(); enemies.clear(); items.clear(); parts.clear();
   score = 0; lives = 3; elapsed = 0; diff = 1; spawnT = 0.8;
   player.x = GW / 2; player.y = GH - 90;
-  player.pw = 1; player.cool = 0; player.inv = 1.5;
+  player.pw = 1; player.cool = 0; player.inv = 1.5; player.pcount = 0;
   state = "play";
 }
 
@@ -167,7 +168,7 @@ function spawnEnemy(type, x, y) {
   const e = enemies.get();
   e.type = type; e.x = x; e.y = y; e.t = Math.random() * 6.28;
   if (type === "zako")    { e.hp = 1;  e.r = 12; e.vy = (110 + Math.random() * 50) * diff; e.ft = 99; }
-  if (type === "shooter") { e.hp = 3;  e.r = 14; e.vy = 65 * diff; e.ft = 1.0 + Math.random(); }
+  if (type === "shooter") { e.hp = 9;  e.r = 14; e.vy = 65 * diff; e.ft = 1.0 + Math.random(); }
   if (type === "tank")    { e.hp = 12; e.r = 24; e.vy = 38 * diff; e.ft = 1.5; }
 }
 
@@ -230,7 +231,7 @@ function hitPlayer() {
 // ===== 更新 =====
 function shotAngles(pw) {
   if (pw === 1) return [0];
-  const halfSpread = 0.07 + (pw - 1) * 0.045; // pwが上がるほど扇が広がる
+  const halfSpread = 0.08 + (pw - 1) * 0.055; // pwが上がるほど扇が広がる
   const angles = [];
   for (let i = 0; i < pw; i++) {
     const t = (i / (pw - 1)) * 2 - 1; // -1..1
@@ -338,8 +339,16 @@ function collide() {
     if (hitCircle(it.x, it.y, it.r + 14, player.x, player.y, player.r)) {
       it.active = false;
       sndItem();
-      if (player.pw < POWER_MAX) player.pw++;
-      else score += 500;
+      if (player.pw < POWER_MAX) {
+        player.pw++;
+      } else {
+        player.pcount++;
+        if (player.pcount >= PCOUNT_1UP) {
+          player.pcount = 0;
+          lives++;
+          sndBig();
+        }
+      }
     }
   }
 }
@@ -481,6 +490,10 @@ function draw() {
     ctx.fillText("♥".repeat(Math.max(0, lives)), 10, 28);
     ctx.fillStyle = "#3f6";
     ctx.fillText("PW " + "▮".repeat(player.pw) + "▯".repeat(POWER_MAX - player.pw), 10, 48);
+    if (player.pw >= POWER_MAX) {
+      ctx.fillStyle = "#fc6";
+      ctx.fillText("1UP " + player.pcount + "/" + PCOUNT_1UP, 10, 68);
+    }
   }
 
   // 画面オーバーレイ
