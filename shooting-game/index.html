@@ -361,15 +361,12 @@ function collide() {
     if (hitCircle(it.x, it.y, it.r + 14, player.x, player.y, player.r)) {
       it.active = false;
       sndItem();
-      if (player.pw < POWER_MAX) {
-        player.pw++;
-      } else {
-        player.pcount++;
-        if (player.pcount >= PCOUNT_1UP) {
-          player.pcount = 0;
-          lives++;
-          sndBig();
-        }
+      if (player.pw < POWER_MAX) player.pw++;
+      player.pcount++; // PWが上限かどうかに関わらず取得数を積み上げる
+      if (player.pcount >= PCOUNT_1UP) {
+        player.pcount = 0;
+        lives++;
+        sndBig();
       }
     }
   }
@@ -512,10 +509,8 @@ function draw() {
     ctx.fillText("♥".repeat(Math.max(0, lives)), 10, 28);
     ctx.fillStyle = "#3f6";
     ctx.fillText("PW " + "▮".repeat(player.pw) + "▯".repeat(POWER_MAX - player.pw), 10, 48);
-    if (player.pw >= POWER_MAX) {
-      ctx.fillStyle = "#fc6";
-      ctx.fillText("1UP " + player.pcount + "/" + PCOUNT_1UP, 10, 68);
-    }
+    ctx.fillStyle = "#fc6";
+    ctx.fillText("1UP " + player.pcount + "/" + PCOUNT_1UP, 10, 68);
   }
 
   // 画面オーバーレイ
