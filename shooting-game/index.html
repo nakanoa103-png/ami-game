@@ -230,7 +230,8 @@ function killEnemy(e) {
 function hitPlayer() {
   if (player.inv > 0) return;
   lives--;
-  player.pw = Math.max(1, Math.floor(player.pw / 2)); // 全ロスだと痛すぎるので半減に緩和
+  player.pw = Math.max(1, player.pw - 2);
+  enemies.clear(); eBul.clear(); pBul.clear(); // 被弾時は画面をクリアして仕切り直す
   boomAt(player.x, player.y, "#8df", 30, true);
   sndHit();
   if (lives <= 0) gameOver();
