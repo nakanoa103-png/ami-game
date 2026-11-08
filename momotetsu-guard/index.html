@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>腿鉄 - 鉄の腿で弾を返せ</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, "Yu Gothic UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; overflow:hidden; background:#070b18; color:#fff; }
+    #frame { width:min(94vw, 820px); }
+    header { display:flex; align-items:end; justify-content:space-between; gap:12px; padding:0 4px 10px; }
+    h1 { margin:0; font-size:clamp(20px,4vw,32px); letter-spacing:.08em; color:#ffc844; text-shadow:2px 2px #a32920; }
+    #tag { font-size:12px; color:#b7c8e9; text-align:right; }
+    #gamewrap { position:relative; aspect-ratio:16/9; border:4px solid #253a66; border-radius:12px; overflow:hidden; box-shadow:0 0 0 3px #111b36, 0 18px 50px #000; background:#162955; }
+    canvas { width:100%; height:100%; display:block; image-rendering:pixelated; }
+    #help { text-align:center; color:#c9d6ef; font-weight:700; font-size:clamp(12px,2.2vw,16px); margin:10px 0 0; }
+    #help b { color:#ffd24d; }
+    #touch { display:none; justify-content:space-between; gap:7px; padding:12px 6px 0; user-select:none; }
+    .btn { flex:1; border:2px solid #91b7ef; border-radius:13px; background:#1d356b; color:#fff; padding:10px 7px; font:800 15px system-ui; touch-action:manipulation; }
+    .btn:active { transform:translateY(2px); background:#385ba0; }
+    @media (pointer:coarse) { #touch { display:flex; } #help { display:none; } }
+  </style>
+</head>
+<body>
+  <main id="frame">
+    <header><h1>腿鉄 - M O M O T E T S U</h1><div id="tag">鉄の腿で、世界を守れ。</div></header>
+    <div id="gamewrap"><canvas id="game" width="800" height="450" aria-label="腿鉄ゲーム"></canvas></div>
+    <p id="help"><b>← →</b> 移動　 <b>SPACE / ↑</b> 腿ガード　 <b>Z</b> 腿キック　 <b>ENTER</b> スタート・リトライ</p>
+    <div id="touch"><button class="btn" id="left">←</button><button class="btn" id="guard">腿ガード</button><button class="btn" id="kick">腿キック</button><button class="btn" id="right">→</button></div>
+  </main>
+<script>
+(() => {
+  const c = document.querySelector('#game'), x = c.getContext('2d');
+  const W=c.width,H=c.height, keys={};
+  const state={mode:'title',score:0,high:+localStorage.momotetsuHigh||0,hp:3,energy:0,powerPop:0,level:1,t:0,shake:0,flash:0,finalRush:false,shots:[],sparks:[],enemies:[],player:{px:145,y:338,vx:0,guard:false,kick:0,inv:0}};
+  const down=e=>{ keys[e.code]=true; if(['Space','ArrowUp','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault(); if(e.code==='Enter' && state.mode!=='play') start(); };
+  addEventListener('keydown',down); addEventListener('keyup',e=>keys[e.code]=false);
+  const touch=(id,code)=>{ const el=document.querySelector(id); ['pointerdown','pointerup','pointercancel','pointerleave'].forEach(type=>el.addEventListener(type,e=>{e.preventDefault();keys[code]=type==='pointerdown';},{passive:false})); };
+  touch('#left','ArrowLeft'); touch('#right','ArrowRight'); touch('#guard','Space'); touch('#kick','KeyZ');
+  function start(){ Object.assign(state,{mode:'play',score:0,hp:3,energy:0,powerPop:0,level:1,t:0,shake:0,flash:0,finalRush:false,shots:[],sparks:[],enemies:[]}); Object.assign(state.player,{px:145,y:338,vx:0,guard:false,kick:0,inv:0}); }
+  function burst(px,py,col,n=8){ for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,s=1+Math.random()*3;state.sparks.push({px,py,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1,life:18+Math.random()*14,col});} }
+  function shot(enemy){ const p=state.player; const dx=p.px-enemy.px,dy=p.y-28-enemy.py, len=Math.hypot(dx,dy)||1, speed=(enemy.kind==='jet'?3.8:enemy.kind==='drone'?3.4:2.8)+state.level*.12; state.shots.push({px:enemy.px-10,py:enemy.py-11,vx:dx/len*speed,vy:dy/len*speed,hot:true,missile:enemy.kind==='jet',life:260}); }
+  function returnShot(s,boost=1,assignedTarget=null){
+    const target=assignedTarget||state.enemies.filter(e=>e.px>s.px).sort((a,b)=>Math.hypot(a.px-s.px,(a.py-18)-s.py)-Math.hypot(b.px-s.px,(b.py-18)-s.py))[0];
+    const tx=target?target.px:W+80, ty=target?target.py-22:s.py;
+    const dx=tx-s.px,dy=ty-s.py,len=Math.hypot(dx,dy)||1,speed=5.4*boost;
+    s.hot=false;s.target=target;s.vx=dx/len*speed;s.vy=dy/len*speed;
+  }
+  function releasePower(){
+    const p=state.player,targets=state.enemies.filter(e=>e.px>p.px).sort((a,b)=>a.px-b.px);if(!targets.length)return;
+    state.energy=0;const incoming=state.shots.filter(s=>s.hot);let n=0;
+    if(incoming.length){incoming.forEach(s=>returnShot(s,1.7,targets[n++%targets.length]));}
+    else {for(let i=0;i<5;i++){const s={px:p.px+26,py:p.y-52,vx:5,vy:(i-2)*.5,hot:false,life:210};returnShot(s,1.7,targets[i%targets.length]);state.shots.push(s);}}
+    state.score+=500;burst(p.px,p.y-50,'#fff',45);state.flash=.35;
+  }
+  function spawn(){
+    if(state.finalRush){state.enemies.push({px:830+Math.random()*110,py:85+Math.random()*210,kind:'drone',shoot:25+Math.random()*35,hp:1,walk:Math.random()*6});return;}
+    if(state.level>=2&&Math.random()<.28){state.enemies.push({px:850,py:95+Math.random()*135,kind:'jet',shoot:35+Math.random()*45,hp:2,walk:Math.random()*6});return;}
+    const elite=Math.random()<.16+state.level*.018; state.enemies.push({px:850,py:elite?278:326,kind:'gunner',elite,shoot:45+Math.random()*70,hp:elite?3:1,walk:Math.random()*6});
+  }
+  function update(){
+    if(state.mode!=='play')return;
+    state.t++; state.shake=Math.max(0,state.shake-.7); state.flash=Math.max(0,state.flash-.04);state.powerPop=Math.max(0,state.powerPop-1);
+    const p=state.player; p.inv=Math.max(0,p.inv-1); p.guard=!!(keys.Space||keys.ArrowUp); p.kick=Math.max(0,p.kick-1);
+    if(keys.KeyZ&&!p.guard&&p.kick===0){p.kick=16;keys.KeyZ=false;}
+    const move=(keys.ArrowLeft?-1:0)+(keys.ArrowRight?1:0); p.vx+=(move*0.7-p.vx)*.25;p.px=Math.max(36,Math.min(610,p.px+p.vx));
+    const interval=state.finalRush?20:Math.max(42,105-state.level*6); if(state.t%interval===0)spawn(); if(state.t%600===0){state.level++;if(state.level===5){state.finalRush=true;state.flash=.6;}}
+    state.enemies.forEach(e=>{ e.px-=e.kind==='jet'?1.35:e.kind==='drone'?1.7:e.elite?.6:.9; e.walk+=.08; e.shoot--;if(e.shoot<0){shot(e);e.shoot=(e.kind==='drone'?28:e.kind==='jet'?50:70)+Math.random()*(e.kind==='drone'?28:75)-state.level*2;} }); state.enemies=state.enemies.filter(e=>e.px>-70&&e.hp>0);
+    state.shots.forEach(s=>{if(!s.hot&&s.target&&s.target.hp>0){const dx=s.target.px-s.px,dy=(s.target.py-18)-s.py,len=Math.hypot(dx,dy)||1;const speed=Math.hypot(s.vx,s.vy);s.vx+=(dx/len*speed-s.vx)*.30;s.vy+=(dy/len*speed-s.vy)*.30;}s.px+=s.vx;s.py+=s.vy;s.life--; const dx=s.px-p.px,dy=s.py-(p.y-38);
+      if(s.hot && p.kick && Math.abs(dx)<65&&Math.abs(dy)<48){returnShot(s,1.45);state.score+=50;burst(s.px,s.py,'#fff36d',12);}
+      else if(s.hot&&p.guard&&Math.abs(dx)<58&&Math.abs(dy)<65){returnShot(s,1);state.energy=Math.min(100,state.energy+20);state.powerPop=34;state.score+=10;burst(s.px,s.py,'#79e6ff',9);}
+      else if(s.hot&&Math.abs(dx)<23&&Math.abs(dy)<42&&p.inv===0){state.hp--;p.inv=75;state.shake=12;state.flash=.5;burst(p.px,p.y-32,'#ff4b4b',18);if(state.hp<=0){state.mode='over';state.high=Math.max(state.high,state.score);localStorage.momotetsuHigh=state.high;}}
+      if(!s.hot) state.enemies.forEach(e=>{const hit=e.kind==='jet'?44:e.kind==='drone'?28:34;if(Math.abs(s.px-e.px)<hit&&Math.abs(s.py-(e.py-18))<hit){e.hp--;s.life=0;state.score+=e.elite?250:100;burst(e.px,e.py-20,'#ffcb45',18);}});
+    }); state.shots=state.shots.filter(s=>s.life>0&&s.px>-30&&s.px<W+30&&s.py>-20&&s.py<H+20);
+    state.sparks.forEach(q=>{q.px+=q.vx;q.py+=q.vy;q.vy+=.12;q.life--});state.sparks=state.sparks.filter(q=>q.life>0);
+    if(state.energy>=100&&state.enemies.some(e=>e.px>p.px))releasePower();
+  }
+  function text(str,px,py,size,col='#fff',align='left'){x.font=`900 ${size}px system-ui, sans-serif`;x.fillStyle=col;x.textAlign=align;x.fillText(str,px,py);}
+  function draw(){
+    const ox=(Math.random()-.5)*state.shake,oy=(Math.random()-.5)*state.shake;x.save();x.translate(ox,oy);
+    const sky=x.createLinearGradient(0,0,0,H);sky.addColorStop(0,'#122a64');sky.addColorStop(.65,'#446cb2');sky.addColorStop(.65,'#20345a');sky.addColorStop(1,'#101932');x.fillStyle=sky;x.fillRect(0,0,W,H);
+    x.fillStyle='#d7eaff';x.beginPath();x.arc(644,72,36,0,7);x.fill();x.fillStyle='#8fb6ed';for(let i=0;i<7;i++)x.fillRect(i*132+25,130+(i%2)*15,94,120);
+    x.fillStyle='#1c2744';x.fillRect(0,367,W,83);x.fillStyle='#324a72';for(let i=0;i<W;i+=48)x.fillRect(i,382,31,4);
+    state.enemies.forEach(e=>drawEnemy(e)); state.shots.forEach(drawShot); drawPlayer();if(state.powerPop)text('腿力 +1',state.player.px,state.player.y-98-(34-state.powerPop)*.45,17,'#7df0ff','center');state.sparks.forEach(q=>{x.globalAlpha=q.life/32;x.fillStyle=q.col;x.fillRect(q.px-2,q.py-2,4,4);x.globalAlpha=1;});
+    hud(); if(state.flash){x.fillStyle=`rgba(255,255,255,${state.flash})`;x.fillRect(0,0,W,H);} if(state.mode==='title')overlay('腿鉄','ENTER で 出撃','弾を腿で受けて、撃ち返せ！'); if(state.mode==='over')overlay('体に弾が当たりすぎた…','腿が限界だ。もう足が上がらない！',`SCORE ${state.score}　BEST ${state.high}`); x.restore(); requestAnimationFrame(loop);
+  }
+  function drawEnemy(e){ const bob=Math.sin(e.walk)*3;x.save();x.translate(e.px,e.py+bob);
+    if(e.kind==='jet'){x.fillStyle='#8f9db3';x.beginPath();x.moveTo(-58,0);x.lineTo(36,-20);x.lineTo(57,0);x.lineTo(36,20);x.closePath();x.fill();x.fillStyle='#69d9ff';x.fillRect(9,-9,23,18);x.fillStyle='#e14939';x.fillRect(-39,-5,19,10);x.restore();return;}
+    if(e.kind==='drone'){x.fillStyle='#d15c90';x.fillRect(-14,-8,28,16);x.fillStyle='#abb6cd';x.fillRect(-34,-3,68,6);x.fillRect(-3,-25,6,50);x.fillStyle='#ffdc55';x.beginPath();x.arc(0,0,6,0,7);x.fill();x.restore();return;}
+    x.fillStyle=e.elite?'#702f8c':'#293145';x.fillRect(-22,-38,42,39);x.fillStyle='#e5c4a8';x.fillRect(-13,-56,24,22);x.fillStyle='#1a1c25';x.fillRect(-20,-63,37,11);x.fillStyle='#161a25';x.fillRect(-53,-35,36,9);x.fillStyle='#a5b8d2';x.fillRect(-59,-38,20,15);if(e.elite){x.strokeStyle='#ffbb4d';x.lineWidth=3;x.strokeRect(-27,-68,51,78);} x.restore(); }
+  function drawShot(s){x.save();x.translate(s.px,s.py);x.fillStyle=s.hot?(s.missile?'#ffbd45':'#ff5a3d'):'#69e7ff';x.shadowColor=x.fillStyle;x.shadowBlur=12;if(s.missile&&s.hot){x.fillRect(-10,-3,20,6);x.fillStyle='#fff';x.fillRect(5,-1,8,2);}else{x.beginPath();x.arc(0,0,s.hot?6:5,0,7);x.fill();}x.restore();}
+  function drawPlayer(){ const p=state.player,blink=p.inv&&Math.floor(p.inv/5)%2===0;x.save();x.translate(p.px,p.y);if(blink)x.globalAlpha=.4;
+    // 頭と小さく下げた腕。ガードしているのが腕ではないことを明確にする。
+    x.fillStyle='#e94b38';x.fillRect(-18,-47,35,42);x.fillStyle='#f0c9a7';x.fillRect(-13,-70,25,25);x.fillStyle='#28253b';x.fillRect(-17,-77,34,12);
+    x.fillStyle='#f0c9a7';x.fillRect(-31,-38,12,24);x.fillRect(17,-38,12,24);
+    if(p.guard){
+      // 左足は地面に残す。右脚は「太腿→膝→すね→靴」まで描いて、膝を上げた脚にする。
+      x.fillStyle='#d5a64a';x.fillRect(-17,-5,15,22);x.fillStyle='#573720';x.fillRect(-20,15,21,7);
+      x.save();x.translate(0,-25);x.rotate(-.48);
+      x.fillStyle='#9eafc4';x.fillRect(0,-16,64,34);x.fillStyle='#e7eef2';x.fillRect(7,-11,53,7);x.fillStyle='#51637a';x.fillRect(0,12,64,6);
+      x.fillStyle='#d8dde5';x.beginPath();x.arc(64,1,17,0,7);x.fill();text('腿',33,10,20,'#283a50','center');
+      x.save();x.translate(66,3);x.rotate(1.55);x.fillStyle='#d5a64a';x.fillRect(-9,0,18,40);x.fillStyle='#573720';x.fillRect(-14,35,28,10);x.restore();
+      x.restore();text('鉄腿ガード',42,-88,12,'#d9f7ff','center');
+    } else if(p.kick){x.fillStyle='#d5a64a';x.fillRect(-17,-5,13,22);x.save();x.rotate(-.25);x.fillStyle='#b3c9d8';x.fillRect(10,-31,72,24);x.restore();text('腿',58,-12,19,'#263a57','center');}
+    else {x.fillStyle='#d5a64a';x.fillRect(-17,-5,13,22);x.fillRect(5,-5,13,22);x.fillStyle='#573720';x.fillRect(-20,15,20,7);x.fillRect(3,15,20,7);}x.restore();}
+  function hud(){
+    x.fillStyle='rgba(7,12,32,.78)';x.fillRect(12,12,242,72);text(`SCORE  ${state.score}`,24,39,20);text(`WAVE ${state.level}`,24,66,14,'#b8d0ff');text('BODY',158,66,11,'#b8d0ff');for(let i=0;i<3;i++){x.fillStyle=i<state.hp?'#ff5864':'#4c5060';x.fillRect(204+i*12,56,9,12);}
+    const mx=W-330,my=14,mw=312,filled=Math.floor(state.energy/20);
+    x.fillStyle='rgba(7,12,32,.84)';x.fillRect(mx,my,mw,56);text('腿パワー',mx+12,my+22,16,'#d9f7ff');text(`${state.energy}%`,mx+260,my+22,15,state.energy>=80?'#fff05b':'#b9d6ee');
+    for(let i=0;i<5;i++){x.fillStyle=i<filled?'#58ddff':'#263650';x.fillRect(mx+12+i*57,my+31,48,15);if(i<filled){x.fillStyle='#d8fbff';x.fillRect(mx+15+i*57,my+34,42,3);}}
+    text('腿で1発受けるごとに +1　5で鉄腿ラッシュ！',mx+12,my+51,11,'#b9d6ee');
+    if(state.finalRush)text('DRONE RUSH!',W/2,96,26,'#ff6c9a','center');
+  }
+  function overlay(a,b,d){x.fillStyle='rgba(4,8,22,.64)';x.fillRect(0,0,W,H);text(a,W/2,H/2-35,54,'#ffd447','center');text(b,W/2,H/2+12,22,'#fff','center');text(d,W/2,H/2+47,15,'#c7d9ff','center');}
+  function loop(){update();draw();} loop();
+})();
+</script>
+</body>
+</html>
