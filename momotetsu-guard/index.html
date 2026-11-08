@@ -19,8 +19,9 @@
     #help { text-align:center; color:#c9d6ef; font-weight:700; font-size:clamp(12px,2.2vw,16px); margin:10px 0 0; }
     #help b { color:#ffd24d; }
     #touch { display:none; justify-content:space-between; gap:7px; padding:12px 6px 0; user-select:none; }
-    .btn { flex:1; min-width:0; min-height:54px; border:2px solid #91b7ef; border-radius:13px; background:#1d356b; color:#fff; padding:10px 4px; font:800 clamp(12px,3.6vw,15px) system-ui; touch-action:none; -webkit-user-select:none; user-select:none; }
+    .btn { flex:1; min-width:0; min-height:54px; border:2px solid #91b7ef; border-radius:13px; background:#1d356b; color:#fff; padding:10px 4px; font:800 clamp(12px,3.6vw,15px) system-ui; touch-action:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
     .btn:active { transform:translateY(2px); background:#385ba0; }
+    .btn[aria-pressed="true"] { background:#b15120; border-color:#ffd367; }
     @media (pointer:coarse), (hover:none) { #touch { display:flex; } #help { display:none; } }
     @media (max-height:500px) { #frame { width:min(94vw, 820px, calc((100dvh - 110px) * 16 / 9)); } header { padding-bottom:3px; } h1 { font-size:20px; } #touch { padding-top:5px; } .btn { min-height:44px; padding:5px 4px; } }
   </style>
@@ -30,12 +31,12 @@
     <header><h1>腿鉄 - M O M O T E T S U</h1><div id="tag">鉄の腿で、世界を守れ。</div></header>
     <div id="gamewrap"><canvas id="game" width="800" height="450" aria-label="腿鉄ゲーム"></canvas><button id="start" type="button">スタート</button></div>
     <p id="help"><b>← →</b> 移動　 <b>SPACE / ↑</b> 腿ガード　 <b>Z</b> 腿キック　 <b>ENTER</b> スタート・リトライ</p>
-    <div id="touch"><button class="btn" id="left">←</button><button class="btn" id="guard">腿ガード</button><button class="btn" id="kick">腿キック</button><button class="btn" id="right">→</button></div>
+    <div id="touch"><button class="btn" id="left">←</button><button class="btn" id="guard" aria-pressed="false">ガード OFF</button><button class="btn" id="kick">腿キック</button><button class="btn" id="right">→</button></div>
   </main>
 <script>
 (() => {
   const c = document.querySelector('#game'), x = c.getContext('2d'), startButton=document.querySelector('#start');
-  const W=c.width,H=c.height, keys={};
+  const W=c.width,H=c.height, keys={};let mobileGuard=false;
   const state={mode:'title',score:0,high:+localStorage.momotetsuHigh||0,hp:3,energy:0,powerPop:0,level:1,t:0,shake:0,flash:0,finalRush:false,shots:[],sparks:[],enemies:[],player:{px:145,y:338,vx:0,guard:false,kick:0,inv:0}};
   const down=e=>{ keys[e.code]=true; if(['Space','ArrowUp','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault(); if(e.code==='Enter' && state.mode!=='play') start(); };
   addEventListener('keydown',down); addEventListener('keyup',e=>keys[e.code]=false);
@@ -44,10 +45,14 @@
     const release=e=>{if(e.pointerId!==pointer)return;pointer=null;if(code!=='KeyZ')keys[code]=false;};
     el.addEventListener('pointerup',release);el.addEventListener('pointercancel',release);el.addEventListener('lostpointercapture',release);
   };
-  touch('#left','ArrowLeft'); touch('#right','ArrowRight'); touch('#guard','Space'); touch('#kick','KeyZ');
+  touch('#left','ArrowLeft'); touch('#right','ArrowRight'); touch('#kick','KeyZ');
+  const guardButton=document.querySelector('#guard');
+  function setMobileGuard(value){mobileGuard=value;guardButton.setAttribute('aria-pressed',String(value));guardButton.textContent=value?'ガード ON':'ガード OFF';}
+  guardButton.addEventListener('click',e=>{e.preventDefault();if(state.mode==='play')setMobileGuard(!mobileGuard);});
+  document.querySelector('#touch').addEventListener('contextmenu',e=>e.preventDefault());
   addEventListener('blur',()=>{Object.keys(keys).forEach(code=>keys[code]=false);});
   startButton.addEventListener('click',()=>{if(state.mode!=='play')start();});
-  function start(){ Object.keys(keys).forEach(code=>keys[code]=false);startButton.hidden=true;Object.assign(state,{mode:'play',score:0,hp:3,energy:0,powerPop:0,level:1,t:0,shake:0,flash:0,finalRush:false,shots:[],sparks:[],enemies:[]}); Object.assign(state.player,{px:145,y:338,vx:0,guard:false,kick:0,inv:0}); }
+  function start(){ Object.keys(keys).forEach(code=>keys[code]=false);setMobileGuard(false);startButton.hidden=true;Object.assign(state,{mode:'play',score:0,hp:3,energy:0,powerPop:0,level:1,t:0,shake:0,flash:0,finalRush:false,shots:[],sparks:[],enemies:[]}); Object.assign(state.player,{px:145,y:338,vx:0,guard:false,kick:0,inv:0}); }
   function burst(px,py,col,n=8){ for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,s=1+Math.random()*3;state.sparks.push({px,py,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1,life:18+Math.random()*14,col});} }
   function shot(enemy){ const p=state.player; const dx=p.px-enemy.px,dy=p.y-28-enemy.py, len=Math.hypot(dx,dy)||1, speed=(enemy.kind==='jet'?3.8:enemy.kind==='drone'?3.4:2.8)+state.level*.12; state.shots.push({px:enemy.px-10,py:enemy.py-11,vx:dx/len*speed,vy:dy/len*speed,hot:true,missile:enemy.kind==='jet',life:260}); }
   function returnShot(s,boost=1,assignedTarget=null){
@@ -71,8 +76,9 @@
   function update(){
     if(state.mode!=='play')return;
     state.t++; state.shake=Math.max(0,state.shake-.7); state.flash=Math.max(0,state.flash-.04);state.powerPop=Math.max(0,state.powerPop-1);
-    const p=state.player; p.inv=Math.max(0,p.inv-1); p.guard=!!(keys.Space||keys.ArrowUp); p.kick=Math.max(0,p.kick-1);
-    if(keys.KeyZ){if(!p.guard&&p.kick===0)p.kick=16;keys.KeyZ=false;}
+    const p=state.player; p.inv=Math.max(0,p.inv-1);p.kick=Math.max(0,p.kick-1);
+    if(keys.KeyZ){if(p.kick===0&&!(keys.Space||keys.ArrowUp))p.kick=16;keys.KeyZ=false;}
+    p.guard=!!(keys.Space||keys.ArrowUp||(mobileGuard&&!p.kick));
     const move=(keys.ArrowLeft?-1:0)+(keys.ArrowRight?1:0); p.vx+=(move*0.7-p.vx)*.25;p.px=Math.max(36,Math.min(610,p.px+p.vx));
     const interval=state.finalRush?20:Math.max(42,105-state.level*6); if(state.t%interval===0)spawn(); if(state.t%600===0){state.level++;if(state.level===5){state.finalRush=true;state.flash=.6;}}
     state.enemies.forEach(e=>{ e.px-=e.kind==='jet'?1.35:e.kind==='drone'?1.7:e.elite?.6:.9; e.walk+=.08; e.shoot--;if(e.shoot<0){shot(e);e.shoot=(e.kind==='drone'?28:e.kind==='jet'?50:70)+Math.random()*(e.kind==='drone'?28:75)-state.level*2;} }); state.enemies=state.enemies.filter(e=>e.px>-70&&e.hp>0);
