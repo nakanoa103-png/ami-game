@@ -6,7 +6,7 @@
 <title>虎くんクエスト</title>
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; touch-action:manipulation; -webkit-touch-callout:none; }
   html,body { background:#0a0a12; height:100%; overflow:hidden;
     font-family:'DotGothic16','MS Gothic',monospace; color:#fff; }
   #app { max-width:540px; margin:0 auto; height:100%;
@@ -733,6 +733,14 @@ function press(btn){
 }
 const KEYMAP = { ArrowUp:"up", ArrowDown:"down", ArrowLeft:"left", ArrowRight:"right",
   z:"a", Z:"a", Enter:"a", x:"b", X:"b", Escape:"b", " ":"a" };
+// iPhone Safari: ピンチ・ダブルタップで拡大されるのを止める
+["gesturestart","gesturechange","gestureend"].forEach(t => addEventListener(t, e => e.preventDefault()));
+let lastTouchEnd = 0;
+addEventListener("touchend", e => {
+  const now = Date.now();
+  if(now - lastTouchEnd < 350) e.preventDefault();
+  lastTouchEnd = now;
+}, { passive:false });
 addEventListener("keydown", e => {
   const b = KEYMAP[e.key]; if(!b) return;
   e.preventDefault();
