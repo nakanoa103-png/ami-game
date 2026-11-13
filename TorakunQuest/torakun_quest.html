@@ -758,6 +758,8 @@ document.querySelectorAll(".pbtn").forEach(el => {
 document.querySelectorAll(".abtn").forEach(el => {
   el.addEventListener("pointerdown", e => { e.preventDefault(); press(el.dataset.btn); });
 });
+// メッセージウィンドウをタップしても次へ進める（Aボタンと同じ）
+document.getElementById("msgwin").addEventListener("pointerdown", e => { e.preventDefault(); press("a"); });
 
 /* ---------- 描画 ---------- */
 function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
