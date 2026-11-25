@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>西南戦争 1877</title>
+<link rel="stylesheet" href="style.css?v=18">
+</head>
+<body>
+<header>
+  <h1>西南戦争 1877</h1>
+  <div id="date"></div>
+  <button id="btn-help" type="button">遊び方</button>
+</header>
+<main>
+  <section id="map-wrap"><svg id="map" viewBox="0 0 1000 690" role="img" aria-label="作戦地図"></svg><button id="btn-end" class="primary" type="button" data-act="end">ターン終了</button><div id="news" aria-live="polite"></div></section>
+  <aside>
+    <div id="status" class="card"></div>
+    <div id="node" class="card"></div>
+    <div id="actions" class="card"></div>
+  </aside>
+  <div id="log" class="card"></div>
+</main>
+<div id="overlay" hidden><div id="dialog"></div></div>
+<script src="data.js?v=18"></script>
+<script src="game.js?v=18"></script>
+</body>
+</html>

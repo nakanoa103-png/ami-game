@@ -1,0 +1,103 @@
+:root {
+  --paper: #f6f0df; --ink: #2b2620; --line: #cdbf99; --card: #fffaf0;
+  --saigo: #b5332a; --gov: #2c4a7c; --gold: #d99a1c; --sea: #cfe0e6; --land: #ece2c6;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink);
+  font-family: "Yu Gothic UI", "Hiragino Sans", "Noto Sans JP", sans-serif; font-size: 14px; }
+header { display: flex; align-items: center; gap: 16px; padding: 8px 16px; background: #3a2f25; color: #f6f0df; }
+header h1 { font-size: 18px; margin: 0; font-family: "Yu Mincho", "Hiragino Mincho ProN", serif; letter-spacing: .1em; }
+#date { flex: 1; }
+/* 地図の左上（福岡の上の玄界灘）に置く */
+#btn-end { position: absolute; left: 13%; top: 2.5%; padding: 8px 22px; font-size: 15px;
+  border-color: #7a1f18; box-shadow: 0 2px 6px rgba(0, 0, 0, .25); }
+button { font: inherit; padding: 6px 10px; border: 1px solid #8a7a55; border-radius: 4px; background: #fff; color: var(--ink); cursor: pointer; }
+button:hover:not(:disabled) { background: #fdf3d4; }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: var(--saigo); border-color: var(--saigo); color: #fff; font-weight: bold; }
+button.primary:hover:not(:disabled) { background: #9c2a22; }
+button.danger { border-color: var(--saigo); color: var(--saigo); }
+main { display: grid; grid-template-columns: minmax(0, max(480px, calc((100vh - 290px) * 1.449))) 360px; justify-content: center; grid-template-areas: 'map side' 'log side'; grid-template-rows: auto 1fr; gap: 12px; padding: 12px; align-items: start; }
+#map-wrap { grid-area: map; min-width: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--sea); }
+#map { display: block; width: 100%; height: auto; }
+aside { grid-area: side; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+.card h2 { font-size: 15px; margin: 0 0 6px; }
+.card h3 { font-size: 13px; margin: 8px 0 4px; color: #6b5e45; }
+.gauge { display: grid; grid-template-columns: 5em 1fr 2.5em; align-items: center; gap: 6px; margin: 3px 0; }
+.bar { height: 10px; background: #e5dcc3; border-radius: 5px; overflow: hidden; }
+.bar { position: relative; }
+.bar i { display: block; height: 100%; }
+.bar .mark { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--saigo); }
+.goal { font-size: 12px; color: #6b5e45; margin: 0 0 6px; }
+.goal b { color: var(--saigo); }
+.ship { font-size: 12px; color: #2f6f8f; background: #e6f0f4; border-radius: 4px; padding: 4px 8px; margin: 0 0 6px; }
+.from { font-size: 12px; color: #6b5e45; margin: 8px 0 4px; }
+.gauge b { text-align: right; }
+.forces { display: flex; gap: 12px; margin-top: 6px; flex-wrap: wrap; }
+.s { color: var(--saigo); } .g { color: var(--gov); }
+.tags { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
+.tag { font-size: 12px; padding: 1px 6px; border-radius: 10px; background: #e9dfc2; }
+.tag.s { background: #f3d6d2; } .tag.g { background: #d5deee; }
+ul.units { list-style: none; margin: 0; padding: 0; }
+ul.units li { padding: 2px 0; display: flex; gap: 6px; align-items: baseline; }
+ul.units label { display: flex; gap: 6px; align-items: baseline; flex: 1; cursor: pointer; }
+ul.units .n { margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
+ul.units small { color: #7a6d55; white-space: nowrap; }
+.dests { display: flex; flex-direction: column; gap: 4px; }
+.dests button { text-align: left; }
+.dests small { color: #6b5e45; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.hint { color: #7a6d55; font-size: 12px; margin: 4px 0 0; }
+#log { grid-area: log; max-height: 260px; overflow-y: auto; }
+#log p { margin: 3px 0; line-height: 1.45; }
+#log .t { font-weight: bold; color: #6b5e45; border-top: 1px solid var(--line); padding-top: 4px; margin-top: 6px; }
+#log .win { color: #7a1f18; } #log .lose { color: #1f3760; } #log .ev { color: #6a4a00; }
+#overlay { position: fixed; inset: 0; background: rgba(30, 24, 18, .6); display: flex; align-items: center; justify-content: center; padding: 16px; }
+#overlay[hidden] { display: none; }
+#dialog { background: var(--card); border-radius: 8px; padding: 20px 24px; max-width: 620px; max-height: 90vh; overflow-y: auto; line-height: 1.7; }
+#dialog h2 { margin-top: 0; font-family: "Yu Mincho", "Hiragino Mincho ProN", serif; }
+#dialog ul { padding-left: 1.3em; }
+#dialog .situation { background: #f3ead2; border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; margin-bottom: 10px; font-size: 13px; line-height: 1.6; }
+#dialog .situation h3 { font-size: 13px; margin: 4px 0 2px; color: #6b5e45; }
+#dialog .situation p, #dialog .situation ul { margin: 2px 0; }
+#dialog .situation .win { color: #7a1f18; } #dialog .situation .lose { color: #1f3760; } #dialog .situation .ev { color: #6a4a00; }
+
+/* 地図 */
+.land { fill: var(--land); stroke: #b9a877; stroke-width: 1.5; }
+.road { stroke: #9a8a60; stroke-width: 2.5; }
+.lane { stroke: #6f93a8; stroke-width: 1.5; stroke-dasharray: 5 5; fill: none; }
+.node { cursor: pointer; }
+.node circle, .node rect { stroke: #fff; stroke-width: 2; }
+.node.s circle, .node.s rect { fill: var(--saigo); }
+.node.g circle, .node.g rect { fill: var(--gov); }
+.node.sel circle, .node.sel rect { stroke: var(--gold); stroke-width: 4; }
+.node.tgt .ring { stroke-dasharray: none; stroke-width: 4; }
+.node.tgt circle:not(.ring), .node.tgt rect { stroke: var(--gold); stroke-width: 3; }
+.node .ring { fill: none; stroke: var(--gold); stroke-width: 2.5; stroke-dasharray: 4 3; }
+.node .ring.sea { stroke: #2f7fa8; }
+.node text { font-size: 14px; text-anchor: middle; paint-order: stroke; stroke: #fff8e6; stroke-width: 3px; stroke-linejoin: round; }
+.node .name { font-weight: bold; fill: var(--ink); }
+.node .cs { fill: var(--saigo); font-weight: bold; }
+.node .cg { fill: var(--gov); font-weight: bold; }
+.npc { font-size: 13px; font-weight: bold; fill: #6a3d8f; text-anchor: end; paint-order: stroke; stroke: #fff8e6; stroke-width: 3px; }
+.maplabel { font-size: 13px; fill: #7f9aa8; font-style: italic; }
+
+@media (max-width: 1100px) {
+  main { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'map' 'side' 'log'; }
+}
+.unit-head { display: flex; align-items: center; gap: 6px; margin: 8px 0 4px; }
+.unit-head h3 { margin: 0; flex: 1; }
+button.mini { font-size: 12px; padding: 2px 8px; }
+
+/* 地図上の最新履歴（太平洋） */
+#map-wrap { position: relative; }
+#news { position: absolute; right: 8px; bottom: 8px; width: 44%; max-height: 42%; overflow: hidden;
+  background: rgba(255, 250, 240, .9); border: 1px solid var(--line); border-radius: 6px;
+  padding: 4px 10px 6px; font-size: 12.5px; line-height: 1.45; pointer-events: none;
+  display: flex; flex-direction: column; justify-content: flex-end; }
+#news p { margin: 2px 0; }
+#news .t { font-weight: bold; color: #6b5e45; font-size: 12px; margin-top: 4px; }
+#news .win { color: #7a1f18; } #news .lose { color: #1f3760; } #news .ev { color: #6a4a00; }
+#news:empty { display: none; }
+@media (max-width: 700px) { #news { display: none; } }

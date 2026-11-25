@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>とつげき行進曲</title>
+<style>
+  html,body{margin:0;background:#1b1f2a;color:#eee;font-family:"Segoe UI","Hiragino Sans","Meiryo",sans-serif;}
+  #wrap{max-width:820px;margin:0 auto;padding:10px;box-sizing:border-box;}
+  canvas{width:100%;display:block;background:#000;border-radius:6px;image-rendering:pixelated;touch-action:manipulation;}
+  .row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center;}
+  button{background:#2f3850;color:#eee;border:1px solid #55607f;border-radius:6px;padding:8px 10px;font-size:14px;cursor:pointer;touch-action:manipulation;}
+  button.on{background:#d9a520;color:#222;border-color:#ffd65a;font-weight:bold;}
+  #pad{display:grid;grid-template-columns:repeat(3,48px);grid-template-rows:repeat(2,44px);gap:4px;margin-left:auto;}
+  #pad button{padding:0;font-size:18px;}
+  .help{font-size:13px;line-height:1.7;color:#aab;margin:10px 2px;}
+  kbd{background:#333b52;border-radius:4px;padding:1px 5px;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c" width="800" height="480"></canvas>
+  <div class="row">
+    <span>陣形</span>
+    <button class="fbtn" data-f="0">1 よこ陣</button>
+    <button class="fbtn" data-f="1">2 たて列</button>
+    <button class="fbtn" data-f="2">3 やじり</button>
+    <button class="fbtn" data-f="3">4 まもり</button>
+    <button id="autoBtn">オート進軍</button>
+    <button id="musicBtn">♪ 音楽</button>
+    <div id="pad">
+      <span></span><button data-d="0,-1">▲</button><span></span>
+      <button data-d="-1,0">◀</button><button data-d="0,1">▼</button><button data-d="1,0">▶</button>
+    </div>
+  </div>
+  <p class="help">
+    <kbd>矢印</kbd>/<kbd>WASD</kbd> 王様を動かす（兵は陣形を保って自動でついてくる）
+    <kbd>クリック</kbd> その場所へ王様が自動で歩く（敵をクリックで王様が攻撃）<br>
+    <kbd>1</kbd>〜<kbd>4</kbd> 陣形切り替え　<kbd>Space</kbd> オート進軍　<kbd>M</kbd> 音楽 ON/OFF<br>
+    敵に体当たりで戦闘。勝敗は「ちから」の差で決まる確率勝負。3勝した兵は昇格。灰色の捕虜に近づくと仲間になる。<br>
+    オート中は捕虜を助けに寄り道し、仲間が戦っている間は待つ。兵は王様に迫る敵を迎え撃ち、魔王は護衛を倒せば兵も挑める（誰が倒してもクリア）。王様は♥の回数だけふんばれる。
+  </p>
+</div>
+<script>
+'use strict';
+const cv=document.getElementById('c'),g=cv.getContext('2d');
+const LIVES=1; // 王様のふんばり回数（多いほど易しい）
+const T=40,VW=20,MW=220,MH=11,HUD=40,TICK=160;
+const GRASS=0,TREE=1,ROCK=2,WALL=3;
+const DIRS=[[1,0],[0,-1],[0,1],[-1,0]];
+const KINDS={
+  leader:{pow:180,name:'王様'},
+  pawn:{pow:40,pro:90,name:'歩兵'},
+  knight:{pow:100,pro:170,name:'騎士'},
+  grunt:{pow:30},soldier:{pow:60},heavy:{pow:110},elite:{pow:140},boss:{pow:250}
+};
+function alt(n){const a=[0];for(let i=1;i<=n;i++)a.push(-i,i);return a;}
+const FORMS=[
+  {name:'よこ陣',slots:(()=>{const s=[];for(const dx of[2,1,-1,-2])for(const dy of alt(4))s.push([dx,dy]);return s;})()},
+  {name:'たて列',slots:(()=>{const s=[[1,0],[2,0],[3,0]];for(let i=1;i<=30;i++)s.push([-i,0]);return s;})()},
+  {name:'やじり',slots:(()=>{const s=[[3,0],[2,-1],[2,1],[2,0],[1,-2],[1,2],[1,-1],[1,1],[1,0],[0,-3],[0,3],[0,-2],[0,2],[0,-1],[0,1]];
+    for(const dx of[-1,-2,-3,-4])for(const dy of alt(dx===-1?4:2))s.push([dx,dy]);return s;})()},
+  // まもり：王様を全方向から囲む。兵が少なくても隙間が偏らないよう、前→後ろ→上→下…と等間隔に埋める
+  {name:'まもり',slots:(()=>{const s=[];for(let r=1;r<=3;r++){
+    const cells=[];
+    for(let dx=-r;dx<=r;dx++)for(let dy=-r;dy<=r;dy++)if(Math.max(Math.abs(dx),Math.abs(dy))===r)cells.push([dx,dy]);
+    const ang=c=>Math.atan2(c[1],c[0]);
+    const angDiff=(a,b)=>{let d=Math.abs(a-b)%(2*Math.PI);return d>Math.PI?2*Math.PI-d:d;};
+    const picked=[cells.find(c=>c[0]===r&&c[1]===0)];
+    const rest=cells.filter(c=>c!==picked[0]);
+    while(rest.length){
+      let bi=0,bv=-1;
+      rest.forEach((c,i)=>{const m=Math.min(...picked.map(p=>angDiff(ang(c),ang(p))));if(m>bv){bv=m;bi=i;}});
+      picked.push(rest.splice(bi,1)[0]);
+    }
+    s.push(...picked);}
+    // 前衛を厚く：強い兵から順に、正面→斜め前→2列目の前、の順で埋める（その後に側面・後方）
+    const pre=[[1,0],[1,-1],[1,1],[2,0],[2,-1],[2,1],[0,-1],[0,1],[-1,0],[3,0],[2,-2],[2,2],[0,-2],[0,2],[-1,-1],[-1,1]];
+    return pre.concat(s.filter(c=>!pre.some(p=>p[0]===c[0]&&p[1]===c[1])));})()}
+];
+
+let map,occ,units,battles,leader,tickN,state='title',msg='',msgT=0,formation=0,auto=false,holdT=0;
+let lastTick=0,advField,fx=[],goal=null,nid=1;
+const rnd=Math.random;
+const idx=(x,y)=>x+y*MW;
+const inb=(x,y)=>x>=0&&y>=0&&x<MW&&y<MH;
+const walk=(x,y)=>inb(x,y)&&map[idx(x,y)]===GRASS;
+const winP=(a,b)=>a.pow*a.pow/(a.pow*a.pow+b.pow*b.pow);
+
+function bfs(tx,ty,x0,x1){
+  const f=new Int16Array(MW*MH).fill(9999);
+  if(!inb(tx,ty))return f;
+  x0=Math.max(0,x0);x1=Math.min(MW-1,x1);
+  const q=[idx(tx,ty)];f[q[0]]=0;
+  for(let h=0;h<q.length;h++){
+    const i=q[h],x=i%MW,y=(i-x)/MW,d=f[i]+1;
+    for(const[dx,dy]of DIRS){
+      const nx=x+dx,ny=y+dy;
+      if(nx<x0||nx>x1||ny<0||ny>=MH)continue;
+      const j=idx(nx,ny);
+      if(map[j]!==GRASS||f[j]<=d)continue;
+      f[j]=d;q.push(j);
+    }
+  }
+  return f;
+}
+
+function add(side,kind,x,y){
+  const u={side,kind,x,y,ox:x,oy:y,pow:KINDS[kind].pow,max:KINDS[kind].pow,wins:0,pro:false,busy:false,alive:true,stuck:0,id:nid++};
+  units.push(u);occ[idx(x,y)]=u;return u;
+}
+function freeSpot(x){
+  for(let t=0;t<30;t++){
+    const y=(rnd()*MH)|0;
+    if(walk(x,y)&&!occ[idx(x,y)]&&advField[idx(x,y)]<9999)return y;
+  }
+  return -1;
+}
+function newGame(){
+  for(;;){
+    map=new Uint8Array(MW*MH);
+    for(let x=9;x<MW-10;x++)for(let y=0;y<MH;y++){
+      const r=rnd();if(r<0.10)map[idx(x,y)]=TREE;else if(r<0.14)map[idx(x,y)]=ROCK;
+    }
+    for(let x=30;x<MW-20;x+=26+((rnd()*8)|0)){
+      const g1=1+((rnd()*4)|0),g2=6+((rnd()*4)|0);
+      for(let y=0;y<MH;y++){
+        if(y===g1||y===g1+1||y===g2||y===g2+1){map[idx(x,y)]=GRASS;map[idx(x-1,y)]=GRASS;map[idx(x+1,y)]=GRASS;}
+        else map[idx(x,y)]=ROCK;
+      }
+    }
+    for(let y=0;y<MH;y++){map[idx(MW-1,y)]=WALL;if(y!==5)map[idx(MW-2,y)]=WALL;}
+    advField=bfs(MW-3,5,0,MW-1);
+    if(advField[idx(4,5)]<9999)break;
+  }
+  occ=new Array(MW*MH).fill(null);units=[];battles=[];fx=[];nid=1;
+  tickN=0;auto=false;holdT=0;goal=null;msg='';
+  leader=add('ally','leader',4,5);leader.lives=LIVES;leader.blockT=0;leader.restT=0;
+  add('ally','knight',5,4);add('ally','knight',5,6);
+  add('ally','pawn',3,4);add('ally','pawn',3,6);add('ally','pawn',2,5);add('ally','pawn',3,5);
+  add('enemy','boss',MW-2,5);
+  for(const[x,y]of[[MW-5,4],[MW-5,6],[MW-7,5]])add('enemy','elite',x,y);
+  for(let x=16;x<MW-9;x++){
+    if(rnd()>0.22)continue;
+    const y=freeSpot(x);if(y<0)continue;
+    const t=x/MW,r=rnd();let k;
+    if(t<0.25)k=r<0.8?'grunt':'soldier';
+    else if(t<0.5)k=r<0.4?'grunt':r<0.85?'soldier':'heavy';
+    else if(t<0.75)k=r<0.1?'grunt':r<0.55?'soldier':r<0.95?'heavy':'elite';
+    else k=r<0.25?'soldier':r<0.7?'heavy':'elite';
+    add('enemy',k,x,y);
+  }
+  for(let x=18;x<MW-12;x+=9+((rnd()*5)|0)){
+    const y=freeSpot(x);if(y<0)continue;
+    add('neutral',rnd()<0.3?'knight':'pawn',x,y);
+  }
+  // 城の手前に、最後の援軍（捕虜の騎士・歩兵）を配置
+  for(const[dx,k]of[[14,'knight'],[14,'knight'],[13,'pawn'],[13,'pawn']]){
+    const x=MW-dx,y=freeSpot(x);if(y>=0)add('neutral',k,x,y);
+  }
+  state='play';lastTick=performance.now();
+  say('すすめ！ 右の果ての城をめざせ');
+  syncButtons();
+}
+function say(s){msg=s;msgT=performance.now()+2600;}
+
+/* ---------- movement / battle ---------- */
+function place(u,x,y){occ[idx(u.x,u.y)]=null;u.x=x;u.y=y;occ[idx(x,y)]=u;}
+function fight(a,b){a.busy=b.busy=true;battles.push({a,b,t:4});sfx('clash');}
+function tryStep(u,nx,ny,swap){
+  if(!walk(nx,ny))return false;
+  const o=occ[idx(nx,ny)];
+  if(!o){place(u,nx,ny);return true;}
+  if(o.busy||o.side==='neutral')return false;
+  if(o.side!==u.side){fight(u,o);return true;}
+  if(swap){
+    const x=u.x,y=u.y;
+    occ[idx(x,y)]=o;occ[idx(nx,ny)]=u;o.x=x;o.y=y;u.x=nx;u.y=ny;return true;
+  }
+  return false;
+}
+function stepField(u,f,opt){
+  let best=null,bd=f[idx(u.x,u.y)];
+  for(const[dx,dy]of DIRS){
+    const nx=u.x+dx,ny=u.y+dy;
+    if(!walk(nx,ny))continue;
+    const d=f[idx(nx,ny)];if(d>=bd)continue;
+    const o=occ[idx(nx,ny)];
+    if(o){
+      if(o.busy||o.side==='neutral')continue;
+      if(o.side!==u.side){if(!opt.attack||!opt.attack(o))continue;}
+      else if(!opt.swap||(o===leader&&u!==leader))continue;
+    }
+    bd=d;best=[nx,ny];
+  }
+  return best?tryStep(u,best[0],best[1],opt.swap):false;
+}
+function resolve(b){
+  const{a,b:d}=b;
+  let aw=rnd()<winP(a,d);
+  // 王様のふんばり：負けるはずの勝負を、残り回数ぶんだけ勝ちに変える
+  if(leader.lives>0&&((a===leader&&!aw)||(d===leader&&aw))){leader.lives--;aw=(a===leader);say('王様がふんばった！ 残り '+leader.lives);sfx('promo');}
+  const w=aw?a:d,l=aw?d:a;
+  w.busy=false;l.busy=false;l.alive=false;occ[idx(l.x,l.y)]=null;
+  fx.push({x:l.x,y:l.y,t:performance.now(),ally:l.side==='ally'});
+  if(w.side==='ally'){
+    w.wins++;
+    if(w===leader){w.max=Math.min(330,w.max+15);w.pow=Math.min(w.max,w.pow+15);}
+    else if(!w.pro&&w.wins>=3){w.pro=true;w.max=w.pow=KINDS[w.kind].pro;say(KINDS[w.kind].name+'が昇格した！（全快）');sfx('promo');}
+    else w.pow=Math.max(Math.round(w.max*0.5),Math.round(w.pow*0.92)); // 勝っても傷つく（休めば回復）
+    sfx('win');
+  }else{w.pow=Math.max(10,Math.round(w.pow*0.85));sfx('lose');}
+  if(l===leader){state='over';stopMusic();sfx('over');}
+  else if(l.kind==='boss'){state='clear';stopMusic();sfx('clear');}
+}
+let held=null,queued=null,touchDir=null;
+function inputDir(){const d=touchDir||held||queued;queued=null;return d;}
+function setAuto(v){auto=v;holdT=0;if(v)goal=null;syncButtons();}
+
+function moveLeader(){
+  const L=leader;if(L.busy){queued=null;return;}
+  const d=inputDir();
+  if(d){goal=null;if(auto){setAuto(false);say('オート進軍 解除');}tryStep(L,L.x+d[0],L.y+d[1],true);return;}
+  if(goal){
+    const o=occ[idx(goal.x,goal.y)];
+    if(goal.enemy&&(!goal.enemy.alive)){goal=null;return;}
+    if(L.x===goal.x&&L.y===goal.y){goal=null;return;}
+    const f=bfs(goal.x,goal.y,Math.min(L.x,goal.x)-12,Math.max(L.x,goal.x)+12);
+    if(!stepField(L,f,{swap:true,attack:e=>e===goal.enemy})){
+      if(++goal.wait>12)goal=null;
+    }else goal.wait=0;
+    return;
+  }
+  if(auto){
+    if(advField[idx(L.x,L.y)]<=5){setAuto(false);say('城は目の前！ ここからは自分の手で');return;}
+    // 仲間を置き去りにしない：敵が近い／仲間が戦闘中／仲間が遅れているときは待つ
+    let near=false,far=0,n=0,fighting=false,cap=null,cd=99;
+    for(const u of units){
+      if(!u.alive)continue;
+      const dist=Math.abs(u.x-L.x)+Math.abs(u.y-L.y);
+      if(u.side==='enemy'&&Math.abs(u.x-L.x)<=4&&Math.abs(u.y-L.y)<=4)near=true;
+      if(u.side==='ally'&&u!==L){n++;if(dist>8)far++;if(u.busy)fighting=true;}
+      if(u.side==='neutral'&&u.x>=L.x-4&&dist<=16&&dist<cd){cd=dist;cap=u;}
+    }
+    const wait=near||fighting||far>n*0.25;
+    if(wait){if(holdT<150){holdT++;return;}holdT=140;}else holdT=0;
+    // 捕虜が近くにいれば、先に助けに行く
+    if(cap){
+      const f=bfs(cap.x,cap.y,Math.min(L.x,cap.x)-10,Math.max(L.x,cap.x)+10);
+      if(autoStep(f))return;
+    }
+    autoStep(advField);
+  }
+}
+// オート中の王様は、前にいる兵を押しのけず「先に進め」と合図して待つ（前衛が王様の前を守れるように）
+function autoStep(f){
+  const L=leader;
+  if(stepField(L,f,{swap:false})){L.blockT=0;return true;}
+  const cur=f[idx(L.x,L.y)];let blocker=null;
+  for(const[dx,dy]of DIRS){
+    const nx=L.x+dx,ny=L.y+dy;
+    if(!walk(nx,ny)||f[idx(nx,ny)]>=cur)continue;
+    const o=occ[idx(nx,ny)];
+    if(o&&o.side==='ally'&&!o.busy){blocker=o;break;}
+  }
+  if(!blocker)return false;
+  if(++L.blockT>=4){L.blockT=0;return stepField(L,f,{swap:true});}
+  blocker.nudge=tickN;
+  return true;
+}
+function freeNear(x,y,taken){
+  x=Math.max(0,Math.min(MW-1,x));y=Math.max(0,Math.min(MH-1,y));
+  for(let r=0;r<=4;r++)for(let dx=-r;dx<=r;dx++)for(let dy=-r;dy<=r;dy++){
+    if(Math.max(Math.abs(dx),Math.abs(dy))!==r)continue;
+    const nx=x+dx,ny=y+dy;
+    if(!walk(nx,ny)||taken.has(idx(nx,ny)))continue;
+    if(nx===leader.x&&ny===leader.y)continue;
+    const o=occ[idx(nx,ny)];
+    if(o&&o.side!=='ally')continue;
+    return[nx,ny];
+  }
+  return[x,y];
+}
+function moveAllies(){
+  const L=leader;
+  const al=units.filter(u=>u.side==='ally'&&u!==L&&u.alive);
+  al.sort((a,b)=>b.pow-a.pow||a.id-b.id);
+  const slots=FORMS[formation].slots,taken=new Set();
+  const ens=units.filter(u=>u.side==='enemy'&&u.alive&&Math.abs(u.x-L.x)+Math.abs(u.y-L.y)<=7);
+  al.forEach((u,i)=>{
+    const s=slots[i%slots.length];
+    let[tx,ty]=freeNear(L.x+s[0],L.y+s[1],taken);
+    taken.add(idx(tx,ty));
+    if(u.busy)return;
+    let atk=null,bd=99;
+    for(const e of ens){
+      if(!e.alive||e.busy)continue;
+      const d=Math.abs(e.x-u.x)+Math.abs(e.y-u.y);
+      const dl=Math.abs(e.x-L.x)+Math.abs(e.y-L.y);
+      // 王様のそばに来た敵は、勝ち目が薄くても体を張って止める（ただし勝率2割未満は避ける）
+      const guard=dl<=3&&d<=7&&winP(u,e)>=0.2;
+      // 魔王は、護衛のエリートがいなくなったら仲間も総出で挑む
+      const assault=e.kind==='boss'&&!ens.some(x=>x.kind==='elite')&&d<=14;
+      // まもり陣形では持ち場を離れない：自分のすぐ近く（2マス）に来た敵だけを相手にする
+      const normal=d<=(formation===3?2:4)&&winP(u,e)>=0.5;
+      if(!(guard||assault||normal))continue;
+      if(u.ban&&u.ban.id===e.id&&tickN<u.ban.until)continue; // 往復の原因になった敵は、しばらく狙わない
+      // 狙う相手を毎tick切り替えると行ったり来たりするので、今の標的を少し優先する
+      const score=(guard?dl:d+8)-(u.tgt===e.id?2:0);
+      if(score<bd){bd=score;atk=e;}
+    }
+    u.tgt=atk?atk.id:0;
+    // 行ったり来たり検知：直近8回の位置が2か所だけを往復していたら、標的を外し、10tickだけ別の持ち場へ向かう（兵同士の入れ替えも許可）
+    {
+      const h=(u.hist||(u.hist=[]));h.push(u.x+','+u.y);if(h.length>8)h.shift();
+      if(!(u.esc&&tickN<u.esc.until)&&h.length===8&&(atk||!(u.x===tx&&u.y===ty))){
+        let ch=0;for(let k=1;k<8;k++)if(h[k]!==h[k-1])ch++;
+        if(new Set(h).size<=2&&ch>=4){
+          if(atk){u.ban={id:atk.id,until:tickN+14};atk=null;u.tgt=0;}
+          u.esc={dx:((rnd()*5)|0)-2,dy:((rnd()*5)|0)-2,until:tickN+10};u.hist=[];window.__osc=(window.__osc||0)+1;
+        }
+      }
+    }
+    if(u.nudge===tickN&&!atk){const[nx,ny]=freeNear(tx+1,ty,taken);tx=nx;ty=ny;}
+    if(atk){tx=atk.x;ty=atk.y;}
+    else if(u.esc&&tickN<u.esc.until)[tx,ty]=freeNear(L.x+u.esc.dx,L.y+u.esc.dy,taken);
+    if(u.x===tx&&u.y===ty){u.stuck=0;return;}
+    const f=bfs(tx,ty,Math.min(u.x,tx)-10,Math.max(u.x,tx)+10);
+    const ok=stepField(u,f,{swap:u.stuck>5||!!(u.esc&&tickN<u.esc.until),attack:o=>o===atk||winP(u,o)>=0.5});
+    u.stuck=ok?0:u.stuck+1;
+  });
+}
+function moveEnemies(){
+  const L=leader,f=bfs(L.x,L.y,L.x-12,L.x+12);
+  for(const e of units){
+    if(e.side!=='enemy'||!e.alive||e.busy||e.kind==='boss')continue;
+    if(e.kind==='heavy'&&tickN%4)continue;
+    if(f[idx(e.x,e.y)]>9)continue;
+    stepField(e,f,{swap:false,attack:()=>true});
+  }
+}
+function recruit(){
+  for(const n of units){
+    if(n.side!=='neutral')continue;
+    let hit=false;
+    for(let dx=-1;dx<=1&&!hit;dx++)for(let dy=-1;dy<=1;dy++){
+      const o=inb(n.x+dx,n.y+dy)&&occ[idx(n.x+dx,n.y+dy)];
+      if(o&&o.side==='ally'){hit=true;break;}
+    }
+    if(hit){n.side='ally';say(KINDS[n.kind].name+'が仲間に加わった！');sfx('join');}
+  }
+}
+// 回復：戦っていない兵は少しずつ傷が癒える。王様は戦わずに休むと「ふんばり」が戻る
+function heal(){
+  for(const u of units){
+    if(u.side!=='ally'||u.busy||u.pow>=u.max||u===leader)continue;
+    if(tickN%5===0)u.pow=Math.min(u.max,u.pow+Math.max(2,Math.round(u.max*0.06)));
+  }
+  if(leader.busy)leader.restT=0;
+  else if(leader.lives<LIVES&&++leader.restT>=80){leader.lives++;leader.restT=0;say('王様のふんばりが回復した！');sfx('join');}
+}
+function tick(){
+  tickN++;
+  for(const u of units){u.ox=u.x;u.oy=u.y;}
+  for(const b of battles)if(--b.t<=0)resolve(b);
+  battles=battles.filter(b=>b.t>0);
+  if(state==='play'){
+    heal();moveLeader();recruit();moveAllies();
+    if(tickN%2===0)moveEnemies();
+    recruit();
+  }
+  units=units.filter(u=>u.alive);
+}
+
+/* ---------- drawing ---------- */
+const BODY={leader:'#d8343a',pawn:'#4a8fe0',knight:'#2c5fb8',grunt:'#8a58ad',soldier:'#a03a78',heavy:'#6b3030',elite:'#40306a',boss:'#1c1c24'};
+function drawTile(t,x,y,tx,ty){
+  g.fillStyle=(tx+ty)&1?'#6cbd58':'#64b551';g.fillRect(x,y,T,T);
+  if(t===TREE){
+    g.fillStyle='#7a5230';g.fillRect(x+17,y+24,6,13);
+    g.fillStyle='#2f7d32';g.beginPath();g.arc(x+20,y+17,14,0,7);g.fill();
+    g.fillStyle='#3f9a42';g.beginPath();g.arc(x+16,y+13,7,0,7);g.fill();
+  }else if(t===ROCK){
+    g.fillStyle='#7d8590';g.beginPath();g.moveTo(x+4,y+34);g.lineTo(x+8,y+12);g.lineTo(x+20,y+5);g.lineTo(x+33,y+13);g.lineTo(x+36,y+34);g.closePath();g.fill();
+    g.fillStyle='#a3abb5';g.beginPath();g.moveTo(x+10,y+14);g.lineTo(x+20,y+8);g.lineTo(x+24,y+16);g.lineTo(x+13,y+20);g.closePath();g.fill();
+  }else if(t===WALL){
+    g.fillStyle='#5a5f6e';g.fillRect(x,y,T,T);
+    g.strokeStyle='#3c404c';g.lineWidth=1;
+    for(let r=0;r<4;r++){g.strokeRect(x+(r&1?-10:0)+.5,y+r*10+.5,20,10);g.strokeRect(x+(r&1?10:20)+.5,y+r*10+.5,20,10);}
+  }
+}
+function drawUnit(u,x,y,now){
+  const k=u.kind,enemy=u.side==='enemy',neutral=u.side==='neutral';
+  let c=x+T/2;if(u.busy)c+=Math.sin(now/28+u.id)*3;
+  const big=k==='boss'?1.25:k==='heavy'?1.12:1;
+  g.fillStyle='rgba(0,0,0,.25)';g.beginPath();g.ellipse(c,y+T-4,12*big,4,0,0,7);g.fill();
+  const bw=20*big,bh=17*big,by=y+T-6-bh;
+  g.fillStyle=neutral?'#8d939c':BODY[k];
+  g.beginPath();g.roundRect(c-bw/2,by,bw,bh,5);g.fill();
+  const hy=by-5*big,hr=8*big;
+  g.fillStyle=enemy?(k==='boss'?'#b33':'#9bcf6a'):'#f3caa0';
+  g.beginPath();g.arc(c,hy,hr,0,7);g.fill();
+  g.fillStyle=k==='boss'?'#ff0':'#222';
+  g.fillRect(c-4*big,hy-1,2,3);g.fillRect(c+2*big,hy-1,2,3);
+  if(enemy){
+    g.fillStyle=k==='elite'||k==='boss'?'#e8d9a0':'#ddd';
+    g.beginPath();g.moveTo(c-hr,hy-3);g.lineTo(c-hr-3,hy-hr-5);g.lineTo(c-hr+5,hy-hr+2);g.fill();
+    g.beginPath();g.moveTo(c+hr,hy-3);g.lineTo(c+hr+3,hy-hr-5);g.lineTo(c+hr-5,hy-hr+2);g.fill();
+    if(k==='soldier'||k==='elite'){g.strokeStyle='#ccc';g.lineWidth=2;g.beginPath();g.moveTo(c-bw/2-3,by+bh);g.lineTo(c-bw/2-3,by-8);g.stroke();}
+    if(k==='heavy'){g.fillStyle='#999';g.fillRect(c-bw/2-5,by+2,6,12);}
+  }else{
+    if(k==='leader'){
+      g.fillStyle='#ffd23e';g.beginPath();g.moveTo(c-8,hy-6);g.lineTo(c-8,hy-14);g.lineTo(c-4,hy-9);g.lineTo(c,hy-15);g.lineTo(c+4,hy-9);g.lineTo(c+8,hy-14);g.lineTo(c+8,hy-6);g.closePath();g.fill();
+    }else if(k==='knight'){
+      g.fillStyle=neutral?'#aaa':'#cfd6e0';g.beginPath();g.arc(c,hy-1,hr+1,Math.PI,0);g.fill();
+      g.strokeStyle='#ddd';g.lineWidth=2;g.beginPath();g.moveTo(c+bw/2+3,by+bh);g.lineTo(c+bw/2+3,by-12);g.stroke();
+    }else{
+      g.fillStyle=neutral?'#777':'#335f9e';g.beginPath();g.arc(c,hy-2,hr,Math.PI,0);g.fill();
+    }
+    if(u.pro){g.fillStyle='#ffd23e';g.fillRect(c-bw/2,by+bh-4,bw,3);g.beginPath();g.arc(c,by+6,3,0,7);g.fill();}
+    if(neutral){g.strokeStyle='#5a4a2a';g.lineWidth=2;g.beginPath();g.moveTo(c-bw/2,by+5);g.lineTo(c+bw/2,by+5);g.moveTo(c-bw/2,by+11);g.lineTo(c+bw/2,by+11);g.stroke();
+      if(((now/400)|0)&1){g.fillStyle='#fff';g.font='bold 12px sans-serif';g.textAlign='center';g.fillText('!',c,hy-12);}}
+  }
+  if(!neutral){
+    g.font='bold 10px sans-serif';g.textAlign='center';
+    g.lineWidth=3;g.strokeStyle='rgba(0,0,0,.65)';g.strokeText(u.pow,c,y+T-1);
+    g.fillStyle=enemy?'#ffb0b0':(u.pow<u.max?'#ffcf6b':'#fff');g.fillText(u.pow,c,y+T-1);
+  }
+}
+function star(x,y,r,now){
+  g.fillStyle=((now/60)|0)&1?'#fff36b':'#ff8a2a';g.beginPath();
+  for(let i=0;i<14;i++){const a=i*Math.PI/7+now/200,rr=i&1?r*0.45:r;g.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr);}
+  g.closePath();g.fill();
+}
+function draw(now){
+  g.setTransform(1,0,0,1,0,0);
+  g.fillStyle='#14171f';g.fillRect(0,0,800,480);
+  if(state==='title'){
+    g.textAlign='center';
+    g.fillStyle='#ffd23e';g.font='bold 54px sans-serif';g.fillText('とつげき行進曲',400,170);
+    g.fillStyle='#ddd';g.font='18px sans-serif';
+    g.fillText('王様と兵をひきいて、右の果ての城をめざす進軍ゲーム',400,225);
+    g.fillText('兵は陣形を保って自動でついてくる。陣形を選んで、体当たりで蹴散らせ！',400,255);
+    if(((now/500)|0)&1){g.fillStyle='#fff';g.font='bold 22px sans-serif';g.fillText('クリック または Enter でスタート',400,340);}
+    return;
+  }
+  const a=Math.min(1,(now-lastTick)/TICK);
+  const ip=u=>[u.ox+(u.x-u.ox)*a,u.oy+(u.y-u.oy)*a];
+  const camX=Math.max(0,Math.min((MW-VW)*T,(ip(leader)[0]-7)*T));
+  const x0=Math.floor(camX/T);
+  g.save();g.beginPath();g.rect(0,HUD,800,440);g.clip();g.translate(-camX,HUD);
+  for(let tx=x0;tx<=x0+VW&&tx<MW;tx++)for(let ty=0;ty<MH;ty++)drawTile(map[idx(tx,ty)],tx*T,ty*T,tx,ty);
+  if(goal){g.strokeStyle='#fff';g.lineWidth=2;g.setLineDash([5,4]);g.strokeRect(goal.x*T+4,goal.y*T+4,T-8,T-8);g.setLineDash([]);}
+  const vis=units.filter(u=>u.x>=x0-1&&u.x<=x0+VW+1).sort((p,q)=>p.y-q.y);
+  for(const u of vis){const[px,py]=ip(u);drawUnit(u,px*T,py*T,now);}
+  for(const b of battles)star((b.a.x+b.b.x)/2*T+20,(b.a.y+b.b.y)/2*T+18,15,now);
+  fx=fx.filter(f=>now-f.t<600);
+  for(const f of fx){const p=(now-f.t)/600;g.globalAlpha=1-p;g.fillStyle=f.ally?'#9cf':'#fff';g.font='bold 20px sans-serif';g.textAlign='center';g.fillText(f.ally?'やられた…':'撃破！',f.x*T+20,f.y*T+14-p*20);g.globalAlpha=1;}
+  g.restore();
+  // HUD
+  g.fillStyle='#232838';g.fillRect(0,0,800,HUD);
+  const n=units.filter(u=>u.side==='ally').length-1;
+  g.textAlign='left';g.fillStyle='#fff';g.font='bold 15px sans-serif';
+  g.fillText('城まで '+advField[idx(leader.x,leader.y)]*5+'m',10,17);
+  g.fillText('兵 '+n,150,17);g.fillText('王のちから '+leader.pow,205,17);
+  g.fillStyle='#ff6b81';g.fillText('♥'.repeat(Math.max(0,leader.lives))+'♡'.repeat(Math.max(0,LIVES-leader.lives)),325,17);
+  g.fillStyle='#fff';g.fillText('陣形:'+FORMS[formation].name,390,17);
+  if(auto){g.fillStyle='#ffd23e';g.fillText('AUTO',500,17);}
+  g.fillStyle='#3a425a';g.fillRect(10,26,780,6);
+  g.fillStyle='#ffd23e';g.fillRect(10,26,780*leader.x/(MW-1),6);
+  g.fillStyle='#e55';g.fillRect(784,23,6,12);
+  if(now<msgT){g.textAlign='right';g.fillStyle='#9fe6a0';g.font='bold 15px sans-serif';g.fillText(msg,790,17);}
+  if(state==='over'||state==='clear'){
+    g.fillStyle='rgba(0,0,0,.6)';g.fillRect(0,HUD,800,440);g.textAlign='center';
+    g.fillStyle=state==='clear'?'#ffd23e':'#ff7b7b';g.font='bold 50px sans-serif';
+    g.fillText(state==='clear'?'城を落とした！ 大勝利！':'王様がやられた…',400,230);
+    g.fillStyle='#fff';g.font='20px sans-serif';g.fillText('クリック または Enter でもう一度',400,290);
+  }
+}
+function loop(now){
+  if(state!=='title'){
+    if(now-lastTick>1000)lastTick=now-TICK;
+    while(now-lastTick>=TICK){lastTick+=TICK;tick();}
+  }
+  draw(now);requestAnimationFrame(loop);
+}
+
+/* ---------- audio ---------- */
+// 同じフォルダに bgm.mp3 を置くとそれを再生。無ければ内蔵のオリジナル行進曲をシンセで鳴らす。
+let AC=null,musicOn=true,useFile=false,synthTimer=null,nextT=0,beatPos=0,noiseBuf=null,master=null;
+const bgm=new Audio();bgm.loop=true;bgm.volume=0.6;
+const BPM=126,HB=60/BPM/2;
+const MELODY=[[67,.5],[67,.5],[72,1],[72,.5],[74,.5],[76,1], [76,.5],[74,.5],[72,1],[74,1],[67,1],
+ [69,.5],[69,.5],[74,1],[74,.5],[76,.5],[77,1], [76,.5],[74,.5],[76,1],[74,2],
+ [67,.5],[67,.5],[72,1],[76,.5],[76,.5],[79,1], [81,1],[79,.5],[76,.5],[77,1],[74,1],
+ [76,.5],[77,.5],[79,1],[74,.5],[76,.5],[77,1], [76,1],[74,1],[72,2]];
+const BASS=[48,48,50,43,48,53,43,48];
+const melAt={};{let b=0;for(const[m,d]of MELODY){melAt[b*2]=[m,d];b+=d;}}
+const hz=m=>440*Math.pow(2,(m-69)/12);
+function initAudio(){
+  if(!AC){
+    AC=new(window.AudioContext||window.webkitAudioContext)();
+    master=AC.createGain();master.gain.value=0.5;master.connect(AC.destination);
+    noiseBuf=AC.createBuffer(1,AC.sampleRate*0.3,AC.sampleRate);
+    const d=noiseBuf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+  }
+  if(AC.state==='suspended')AC.resume();
+}
+function tone(f,t,dur,type,vol,f2){
+  const o=AC.createOscillator(),v=AC.createGain();o.type=type;o.frequency.setValueAtTime(f,t);
+  if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+dur);
+  v.gain.setValueAtTime(vol,t);v.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  o.connect(v);v.connect(master);o.start(t);o.stop(t+dur+0.02);
+}
+function noise(t,dur,vol){
+  const s=AC.createBufferSource(),v=AC.createGain();s.buffer=noiseBuf;
+  v.gain.setValueAtTime(vol,t);v.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  s.connect(v);v.connect(master);s.start(t);s.stop(t+dur);
+}
+function sched(){
+  while(nextT<AC.currentTime+0.25){
+    const m=melAt[beatPos];
+    if(m)tone(hz(m[0]),nextT,m[1]*HB*2*0.92,'square',0.11);
+    if(beatPos%2===0){
+      const beat=beatPos/2,root=BASS[(beat/4)|0];
+      tone(hz(beat%2?root+7:root),nextT,HB*1.6,'triangle',0.28);
+      if(beat%2)noise(nextT,0.09,0.16);
+    }else if(beatPos%4===3)noise(nextT,0.04,0.07);
+    beatPos=(beatPos+1)%64;nextT+=HB;
+  }
+}
+function startSynth(){if(synthTimer||!AC)return;nextT=AC.currentTime+0.05;beatPos=0;synthTimer=setInterval(sched,80);}
+function startMusic(){
+  if(!musicOn)return;initAudio();
+  if(!bgm.src)bgm.src='bgm.mp3';
+  bgm.currentTime=0;
+  bgm.play().then(()=>{useFile=true;}).catch(()=>{useFile=false;if(musicOn&&state==='play')startSynth();});
+}
+function stopMusic(){bgm.pause();if(synthTimer){clearInterval(synthTimer);synthTimer=null;}}
+function sfx(k){
+  if(!AC)return;const t=AC.currentTime;
+  if(k==='clash'){noise(t,0.12,0.25);tone(220,t,0.12,'square',0.12,90);}
+  else if(k==='win'){tone(660,t,0.08,'square',0.12);tone(990,t+0.08,0.12,'square',0.12);}
+  else if(k==='lose'){tone(300,t,0.3,'sawtooth',0.14,80);}
+  else if(k==='join'){[523,659,784].forEach((f,i)=>tone(f,t+i*0.07,0.1,'triangle',0.3));}
+  else if(k==='promo'){[523,659,784,1047].forEach((f,i)=>tone(f,t+0.1+i*0.09,0.14,'square',0.12));}
+  else if(k==='over'){[392,349,311,196].forEach((f,i)=>tone(f,t+i*0.28,0.3,'triangle',0.35));}
+  else if(k==='clear'){[523,523,523,659,784,1047].forEach((f,i)=>tone(f,t+i*0.16,i===5?0.7:0.14,'square',0.14));}
+}
+
+/* ---------- input ---------- */
+function start(){initAudio();newGame();startMusic();}
+function setFormation(i){formation=i;if(state==='play')say('陣形：'+FORMS[i].name);syncButtons();}
+function toggleMusic(){
+  musicOn=!musicOn;
+  if(!musicOn)stopMusic();else if(state==='play')startMusic();
+  syncButtons();
+}
+function syncButtons(){
+  document.querySelectorAll('.fbtn').forEach(b=>b.classList.toggle('on',+b.dataset.f===formation));
+  document.getElementById('autoBtn').classList.toggle('on',auto);
+  document.getElementById('musicBtn').classList.toggle('on',musicOn);
+}
+const KEYDIR={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0],w:[0,-1],s:[0,1],a:[-1,0],d:[1,0]};
+const down=[];
+addEventListener('keydown',e=>{
+  const k=e.key.length===1?e.key.toLowerCase():e.key;
+  if(KEYDIR[k]){e.preventDefault();if(!down.includes(k))down.push(k);held=KEYDIR[k];queued=KEYDIR[k];return;}
+  if(k===' '){e.preventDefault();if(state==='play'){setAuto(!auto);say(auto?'オート進軍 開始':'オート進軍 解除');}return;}
+  if(k==='Enter'){if(state!=='play')start();return;}
+  if(k>='1'&&k<='4')setFormation(+k-1);
+  if(k==='m')toggleMusic();
+});
+addEventListener('keyup',e=>{
+  const k=e.key.length===1?e.key.toLowerCase():e.key;
+  const i=down.indexOf(k);if(i>=0)down.splice(i,1);
+  held=down.length?KEYDIR[down[down.length-1]]:null;
+});
+addEventListener('blur',()=>{down.length=0;held=null;touchDir=null;});
+cv.addEventListener('pointerdown',e=>{
+  if(state!=='play'){start();return;}
+  const r=cv.getBoundingClientRect();
+  const px=(e.clientX-r.left)*800/r.width,py=(e.clientY-r.top)*480/r.height;
+  if(py<HUD)return;
+  const camX=Math.max(0,Math.min((MW-VW)*T,(leader.x-7)*T));
+  const tx=Math.floor((px+camX)/T),ty=Math.floor((py-HUD)/T);
+  if(!walk(tx,ty))return;
+  const o=occ[idx(tx,ty)];
+  if(auto)setAuto(false);
+  goal={x:tx,y:ty,enemy:o&&o.side==='enemy'?o:null,wait:0};
+});
+document.querySelectorAll('.fbtn').forEach(b=>b.addEventListener('click',()=>setFormation(+b.dataset.f)));
+document.getElementById('autoBtn').addEventListener('click',()=>{if(state==='play'){setAuto(!auto);say(auto?'オート進軍 開始':'オート進軍 解除');}});
+document.getElementById('musicBtn').addEventListener('click',toggleMusic);
+document.querySelectorAll('#pad button').forEach(b=>{
+  const d=b.dataset.d.split(',').map(Number);
+  b.addEventListener('pointerdown',e=>{e.preventDefault();touchDir=d;queued=d;});
+  for(const ev of['pointerup','pointerleave','pointercancel'])b.addEventListener(ev,()=>{if(touchDir===d)touchDir=null;});
+});
+syncButtons();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
