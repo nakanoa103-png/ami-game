@@ -430,6 +430,7 @@ function selectNode(id) {
 // ───────── ターン進行 ─────────
 function endTurn() {
   if (S.over) return;
+  const logFrom = S.log.length;
   // 熊本城の包囲
   if (!S.fortFallen) {
     if (men(field('kumamoto', 's')) >= SIEGE_MEN) {
@@ -448,6 +449,33 @@ function endTurn() {
     } else startTurn();
   }
   selectNode(sel);   // 新しいターン：動ける部隊を選び直す
+  if (!S.over && $('#overlay').hidden) showNews(logFrom);
+}
+
+// ターン終了後の出来事をポップアップで見せる
+// 進軍先をポップアップで選ぶ（地図とのスクロールの往復を減らす）
+function showDests() {
+  const dests = destinations();
+  if (!dests.length) return;
+  let h = `<h2>${nm(sel)}から進軍</h2><p class="hint">選択中 ${fmt(men(selectedUnits()))}。方角は${nm(sel)}から見たものです。</p><div class="dests">`;
+  h += dests.map(destButton).join('');
+  h += '</div><div class="row"><button type="button" data-act="close">閉じる</button></div>';
+  showDialog(h);
+}
+
+let lastNewsFrom = 0;
+function showNews(from) {
+  lastNewsFrom = from;
+  const items = S.log.slice(from);
+  if (!items.length) return;
+  let h = `<h2>${dateStr(Math.min(S.turn, MAX_TURN))}</h2><div class="situation">`;
+  let lt = null;
+  for (const e of items) {
+    if (e.t !== lt) { h += `<h3>${dateStr(Math.min(e.t, MAX_TURN))}</h3>`; lt = e.t; }
+    h += `<p class="${e.cls}">${e.msg}</p>`;
+  }
+  h += '</div><div class="row"><button type="button" class="primary" data-act="close">閉じる</button></div>';
+  showDialog(h);
 }
 
 const PEACE_TEXT = '戦は決着しなかった。疲れ果てた両軍の間に立ったのは、勝海舟だった。<br>'
@@ -851,6 +879,7 @@ function moveGroup(start) {
 
 // ───────── 初期配置 ─────────
 function newGame() {
+  lastNewsFrom = 0;
   S = {
     turn: 1, prestige: START.prestige, morale: START.morale, ammo: START.ammo, food: START.food,
     ships: false, seaUsed: 0, fortFallen: false, recruits: 0, recruited: false,
@@ -965,12 +994,19 @@ function shipHint(id) {
   return `<p class="ship">${t}</p>`;
 }
 
+// 現在地から見た方角（地図は上が北）
+function dirOf(from, to) {
+  const a = NODES[from], b = NODES[to];
+  const deg = Math.atan2(a.y - b.y, b.x - a.x) * 180 / Math.PI;   // 東=0, 北=90
+  return ['東', '北東', '北', '北西', '西', '南西', '南', '南東'][Math.round(((deg + 360) % 360) / 45) % 8];
+}
+
 function destButton(d) {
   let info = d.type === 'sea' ? `海路・捕捉の危険 ${Math.round(d.lane.risk * 100)}%` : '陸路';
   if (d.odds) info += `・敵 ${fmt(d.odds.men)}・戦力比 ${d.odds.r.toFixed(2)}`;
   if (garrison(d.to).length) info += '・城に籠城兵';
   if (!d.ok) info = d.why;
-  return `<button type="button" data-go="${d.to}" data-type="${d.type}"${d.ok ? '' : ' disabled'}${d.odds ? ' class="danger"' : ''}>${d.odds ? '攻撃：' : ''}${nm(d.to)} <small>${info}</small></button>`;
+  return `<button type="button" data-go="${d.to}" data-type="${d.type}"${d.ok ? '' : ' disabled'}${d.odds ? ' class="danger"' : ''}>${d.odds ? '攻撃：' : ''}${nm(d.to)} <small>【${dirOf(sel, d.to)}】${info}</small></button>`;
 }
 
 // 地図で進軍先を選んだ状態：行き先の様子を見せ、進軍は確定ボタンで
@@ -993,6 +1029,7 @@ function renderNode() {
   const n = NODES[sel];
   const su = at(sel, 's'), gu = at(sel, 'g');
   let h = `<h2>${n.name}</h2>` + nodeTags(sel);
+  if (destinations().length) h += '<div class="row"><button type="button" class="primary" data-act="destPopup">進軍先を選ぶ</button></div>';
   if (su.length) {
     const movable = su.filter((u) => u.mp > 0).length;
     const dis = movable && !S.over ? '' : ' disabled';
@@ -1027,6 +1064,7 @@ function renderActions() {
   h += `<button type="button" data-act="recruit"${rec && !S.over ? '' : ' disabled'}>鹿児島で徴募（残り${5 - S.recruits}回）</button>`;
   if (!S.flags.hisamitsu) h += `<button type="button" data-act="hisamitsu"${canHisamitsu() && !S.over ? '' : ' disabled'}>久光を担ぐ（成功率25%）</button>`;
   h += '</div>';
+  if (S.turn > 1) h += '<div class="row"><button type="button" data-act="lastNews">前の旬の出来事</button></div>';
   $('#actions').innerHTML = h;
 }
 
@@ -1039,15 +1077,6 @@ function renderLog() {
     h += `<p class="${e.cls}">${e.msg}</p>`;
   }
   $('#log').innerHTML = h;
-  // 地図右下（太平洋）に最新の数件を時系列で
-  const recent = S.log.slice(-NEWS_COUNT);
-  let n = '', lt = null;
-  for (const e of recent) {
-    if (e.t !== lt) { n += `<p class="t">${dateStr(Math.min(e.t, MAX_TURN))}</p>`; lt = e.t; }
-    n += `<p class="${e.cls}">${e.msg}</p>`;
-  }
-  $('#news').innerHTML = n;
-  $('#news2').innerHTML = n;
 }
 
 function showDialog(html) { $('#dialog').innerHTML = html; $('#overlay').hidden = false; }
@@ -1137,7 +1166,7 @@ document.addEventListener('click', (e) => {
     return;
   }
   const go = e.target.closest('[data-go]');
-  if (go) { doMove(go.dataset.go, go.dataset.type); return; }
+  if (go) { hideDialog(); doMove(go.dataset.go, go.dataset.type); return; }
   const act = e.target.closest('[data-act]');
   if (!act) return;
   switch (act.dataset.act) {
@@ -1147,6 +1176,8 @@ document.addEventListener('click', (e) => {
     case 'hisamitsu': doHisamitsu(); break;
     case 'new': hideDialog(); newGame(); break;
     case 'close': hideDialog(); break;
+    case 'destPopup': showDests(); break;
+    case 'lastNews': showNews(lastNewsFrom); break;
     case 'okuboAccept': okuboAnswer(true); break;
     case 'okuboRefuse': okuboAnswer(false); break;
     case 'checkAll': checked = new Set(at(sel, 's').filter((u) => u.mp > 0).map((u) => u.id)); render(); break;
