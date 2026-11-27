@@ -1026,7 +1026,7 @@ function renderActions() {
   let h = '<div class="row">';
   h += `<button type="button" data-act="recruit"${rec && !S.over ? '' : ' disabled'}>鹿児島で徴募（残り${5 - S.recruits}回）</button>`;
   if (!S.flags.hisamitsu) h += `<button type="button" data-act="hisamitsu"${canHisamitsu() && !S.over ? '' : ' disabled'}>久光を担ぐ（成功率25%）</button>`;
-  h += '</div><div class="row" style="margin-top:28px;justify-content:flex-end"><button type="button" data-act="new">最初から</button></div>';
+  h += '</div>';
   $('#actions').innerHTML = h;
 }
 
