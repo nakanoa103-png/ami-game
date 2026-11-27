@@ -350,6 +350,7 @@ function doMove(to, type) {
   let units = selectedUnits();
   const from = sel;
   const sea = type === 'sea';
+  S.sActive = true;   // 進軍中は「動きがない」旬ではない
   let force = 0;
   if (sea) {
     S.seaUsed += men(units);
@@ -1025,7 +1026,7 @@ function renderActions() {
   let h = '<div class="row">';
   h += `<button type="button" data-act="recruit"${rec && !S.over ? '' : ' disabled'}>鹿児島で徴募（残り${5 - S.recruits}回）</button>`;
   if (!S.flags.hisamitsu) h += `<button type="button" data-act="hisamitsu"${canHisamitsu() && !S.over ? '' : ' disabled'}>久光を担ぐ（成功率25%）</button>`;
-  h += '</div><div class="row"><button type="button" data-act="new">最初から</button></div>';
+  h += '</div><div class="row" style="margin-top:28px;justify-content:flex-end"><button type="button" data-act="new">最初から</button></div>';
   $('#actions').innerHTML = h;
 }
 
@@ -1046,6 +1047,7 @@ function renderLog() {
     n += `<p class="${e.cls}">${e.msg}</p>`;
   }
   $('#news').innerHTML = n;
+  $('#news2').innerHTML = n;
 }
 
 function showDialog(html) { $('#dialog').innerHTML = html; $('#overlay').hidden = false; }
@@ -1060,7 +1062,7 @@ const helpHtml = (label) => `
 <li><b>落城後の熊本城</b>：取った後は防御 ×${FALLEN_FORT_DEF} の拠点になります（奪い返されれば政府軍が使います）。少数の守備で政府軍を引きつけ、主力を東へ出せます。ただし籠もるだけでは政府威信は下がりません。</li>
 <li><b>弾薬と士気</b>：戦うたびに弾薬が減り、戦力が落ちます。補給源は鹿児島だけで、西郷の本営まで支配地が陸続きのときだけ届きます。熊本城を囲まずに素通りすると、城に街道を断たれます。鹿児島を空にすると政府軍が上陸してきます。</li>
 <li><b>私学校の精鋭は補充できません</b>。徴募兵は質が低く、士気も下げます。</li>
-<li><b>戦果</b>：勝利も占領も熊本城の包囲もないターンが過ぎると、政府威信が${IDLE_RECOVERY}戻ります。籠もっているだけでは勝てません。</li>
+<li><b>戦果</b>：進軍も勝利も占領も熊本城の包囲もないターンが過ぎると、政府威信が${IDLE_RECOVERY}戻ります。動かずに籠もっているだけでは勝てません。</li>
 <li><b>占領</b>：町を取ると政府威信が下がりますが、${fmt(OCCUPY_MEN)}以上の兵で攻め込んだ（入った）ときだけ数えます。戦闘の損害で割り込んでも構いません。</li>
 <li><b>退却</b>：負けると街道でつながった隣へ退きます。陸の逃げ道がないときは、港から海路でつながった、政府軍のいない港へ船で逃れます（自軍の港が優先。${fmt(SEA_CAPACITY)}まで。乗り切れない兵は失われ、捕捉の危険もあります）。退路を塞ぐ敵が薄ければ、押し破って逃れることもできます（敗走中なので戦力は${BREAKOUT_POWER * 10}割で計算）。それもできなければ全滅です。政府軍は西郷の本営に迫ると、別働隊で退路を塞ぎにきます。</li>
 <li><b>大久保の密使</b>：政府威信が${OKUBO_LINE}以下になると、一度だけ西郷の復権を条件に講和を持ちかけてきます。受ければ引き分けで終わります。</li>

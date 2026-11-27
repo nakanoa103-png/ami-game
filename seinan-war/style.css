@@ -100,9 +100,15 @@ button.mini { font-size: 12px; padding: 2px 8px; }
 #news .t { font-weight: bold; color: #6b5e45; font-size: 12px; margin-top: 4px; }
 #news .win { color: #7a1f18; } #news .lose { color: #1f3760; } #news .ev { color: #6a4a00; }
 #news:empty { display: none; }
-/* スマホ：最新の出来事は地図に重ねず、地図のすぐ下に置く。全履歴はいちばん下 */
-@media (max-width: 700px) {
-  #news { position: static; width: auto; max-height: none; border: 0; border-top: 1px solid var(--line);
-    border-radius: 0; background: var(--card); font-size: 13px; pointer-events: auto; }
-  #log { max-height: 200px; }
+/* スマホ：地図のすぐ下に部隊と進軍先、次に戦況、最新の出来事、行動、全履歴（いちばん下） */
+#news2 { display: none; }
+@media (max-width: 1100px) {
+  main { grid-template-areas: none; grid-template-rows: none; }
+  #map-wrap, #log { grid-area: auto; }
+  aside { display: contents; }
+  #node { order: 1; } #status { order: 2; } #news2 { order: 3; } #actions { order: 4; } #log { order: 5; }
 }
+@media (max-width: 700px) { #news { display: none; } #news2:not(:empty) { display: block; } #log { max-height: 200px; } }
+#news2 p { margin: 3px 0; line-height: 1.45; }
+#news2 .t { font-weight: bold; color: #6b5e45; margin-top: 6px; }
+#news2 .win { color: #7a1f18; } #news2 .lose { color: #1f3760; } #news2 .ev { color: #6a4a00; }
